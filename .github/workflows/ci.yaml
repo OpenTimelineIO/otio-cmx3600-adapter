@@ -59,7 +59,7 @@ jobs:
 
       - name: Lint with flake8
         run: |
-          flake8 --show-source --statistics
+          flake8 --show-source --statistics --ignore=E501
         shell: bash
 
       - name: Test with pytest
