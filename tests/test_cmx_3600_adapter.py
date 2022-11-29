@@ -15,9 +15,13 @@ import opentimelineio.test_utils as otio_test_utils
 from tempfile import TemporaryDirectory  # noqa: F401
 import tempfile
 
-from otio_cmx3600_adapter import cmx_3600
+# We import the cmx_3600 module this way to make sure the EDLParseError defined
+# in the module is properly caught. Importing the module and error directly
+# doesn't get accepted as the same exception when asserting in the
+# `test_invalid_record_timecode` below.
+cmx_3600 = otio.adapters.from_name("cmx_3600").module()
 
-
+# List of sample files used in tests
 SAMPLE_DATA_DIR = os.path.join(os.path.dirname(__file__), "sample_data")
 SCREENING_EXAMPLE_PATH = os.path.join(SAMPLE_DATA_DIR, "screening_example.edl")
 AVID_EXAMPLE_PATH = os.path.join(SAMPLE_DATA_DIR, "avid_example.edl")
@@ -33,9 +37,11 @@ GAP_TEST = os.path.join(SAMPLE_DATA_DIR, "gap_test.edl")
 WIPE_TEST = os.path.join(SAMPLE_DATA_DIR, "wipe_test.edl")
 TIMECODE_MISMATCH_TEST = os.path.join(SAMPLE_DATA_DIR, "timecode_mismatch.edl")
 SPEED_EFFECTS_TEST = os.path.join(SAMPLE_DATA_DIR, "speed_effects.edl")
-SPEED_EFFECTS_TEST_SMALL = os.path.join(SAMPLE_DATA_DIR, "speed_effects_small.edl")
+SPEED_EFFECTS_TEST_SMALL = os.path.join(SAMPLE_DATA_DIR,
+                                        "speed_effects_small.edl")
 MULTIPLE_TARGET_AUDIO_PATH = os.path.join(SAMPLE_DATA_DIR, "multi_audio.edl")
-TRANSITION_DURATION_TEST = os.path.join(SAMPLE_DATA_DIR, "transition_duration.edl")
+TRANSITION_DURATION_TEST = os.path.join(SAMPLE_DATA_DIR,
+                                        "transition_duration.edl")
 ENABLED_TEST = os.path.join(SAMPLE_DATA_DIR, "enabled.otio")
 
 
@@ -348,7 +354,8 @@ V     C        00:00:00:00 00:00:00:05 00:00:00:00 00:00:00:05
             # But the EDL text on disk are *not* byte-for-byte identical
             with open(SCREENING_EXAMPLE_PATH) as original_file:
                 with open(tmp_path) as output_file:
-                    self.assertNotEqual(original_file.read(), output_file.read())
+                    self.assertNotEqual(original_file.read(),
+                                        output_file.read())
 
     def test_regex_flexibility(self):
         timeline = otio.adapters.read_from_file(SCREENING_EXAMPLE_PATH)
@@ -385,7 +392,8 @@ V     C        00:00:00:00 00:00:00:05 00:00:00:00 00:00:00:05
 * OTIO TRUNCATED REEL NAME FROM: my_image_sequence.[1025-1060].ext
 '''
         rate = 24
-        tl1 = otio.adapters.read_from_string(trunced_edl1, 'cmx_3600', rate=rate)
+        tl1 = otio.adapters.read_from_string(trunced_edl1, 'cmx_3600',
+                                             rate=rate)
         self.assertIsInstance(tl1, otio.schema.Timeline)
 
         clip1 = tl1.tracks[0][0]
@@ -410,7 +418,8 @@ V     C        00:00:00:00 00:00:00:05 00:00:00:00 00:00:00:05
 * OTIO TRUNCATED REEL NAME FROM: my_image_file.1025.ext
 '''
 
-        tl2 = otio.adapters.read_from_string(trunced_edl2, 'cmx_3600', rate=rate)
+        tl2 = otio.adapters.read_from_string(trunced_edl2, 'cmx_3600',
+                                             rate=rate)
         clip2 = tl2.tracks[0][0]
         media_ref2 = clip2.media_reference
         self.assertIsInstance(media_ref2, otio.schema.ExternalReference)
@@ -422,7 +431,8 @@ V     C        00:00:00:00 00:00:00:05 00:00:00:00 00:00:00:05
 * FROM CLIP: /media/path/my_image_file.[1025].ext
 * OTIO TRUNCATED REEL NAME FROM: my_image_file.[1025].ext
 '''
-        tl3 = otio.adapters.read_from_string(trunced_edl3, 'cmx_3600', rate=rate)
+        tl3 = otio.adapters.read_from_string(trunced_edl3, 'cmx_3600',
+                                             rate=rate)
         clip3 = tl3.tracks[0][0]
         media_ref3 = clip3.media_reference
         self.assertIsInstance(media_ref3, otio.schema.ExternalReference)
@@ -492,10 +502,12 @@ V     C        00:00:00:00 00:00:00:05 00:00:00:00 00:00:00:05
         self.assertEqual(tl.tracks[0][0].duration().value, 9)
         # The visible range must contains all the frames needed for the transition
         # Edit duration + transition duration
-        self.assertEqual(tl.tracks[0][0].visible_range().duration.to_frames(), 19)
+        self.assertEqual(tl.tracks[0][0].visible_range().duration.to_frames(),
+                         19)
         self.assertEqual(tl.tracks[0][0].name, "clip_A")
         self.assertEqual(tl.tracks[0][1].duration().value, 10)
-        self.assertEqual(tl.tracks[0][1].name, "SMPTE_Dissolve from clip_A to clip_B")
+        self.assertEqual(tl.tracks[0][1].name,
+                         "SMPTE_Dissolve from clip_A to clip_B")
         self.assertEqual(tl.tracks[0][2].duration().value, 10)
         self.assertEqual(tl.tracks[0][2].visible_range().duration.value, 10)
         self.assertEqual(tl.tracks[0][2].name, "clip_B")
@@ -523,7 +535,8 @@ V     C        00:00:00:00 00:00:00:05 00:00:00:00 00:00:00:05
         self.assertEqual(trck[2].duration().value, 10)
         self.assertEqual(trck[2].visible_range().duration.value, 10)
 
-        self.assertEqual(tl.tracks[0][0].visible_range().duration.to_frames(), 15)
+        self.assertEqual(tl.tracks[0][0].visible_range().duration.to_frames(),
+                         15)
 
     def test_dissolve_parse_full_clip_dissolve(self):
         tl = otio.adapters.read_from_file(DISSOLVE_TEST_3)
@@ -549,7 +562,8 @@ V     C        00:00:00:00 00:00:00:05 00:00:00:00 00:00:00:05
 
         clip_c = trck[2]
         self.assertEqual(clip_c.name, "Clip_C.mov")
-        self.assertEqual(clip_c.source_range.start_time.value, 86400 + (33 * 24 + 22))
+        self.assertEqual(clip_c.source_range.start_time.value,
+                         86400 + (33 * 24 + 22))
         self.assertEqual(clip_c.duration().value, 30)
         self.assertEqual(clip_c.visible_range().duration.value, 30)
 
@@ -601,7 +615,8 @@ V     C        00:00:00:00 00:00:00:05 00:00:00:00 00:00:00:05
         self.assertEqual(len(tl.tracks[0]), 3)
         self.assertTrue(isinstance(tl.tracks[0][1], otio.schema.Transition))
         self.assertTrue(isinstance(tl.tracks[0][2], otio.schema.Clip))
-        self.assertEqual(tl.tracks[0][2].media_reference.generator_kind, 'black')
+        self.assertEqual(tl.tracks[0][2].media_reference.generator_kind,
+                         'black')
         self.assertEqual(tl.tracks[0][2].duration().value, 24)
         self.assertEqual(tl.tracks[0][2].source_range.start_time.value, 0)
 
@@ -631,13 +646,16 @@ V     C        00:00:00:00 00:00:00:05 00:00:00:00 00:00:00:05
                     for child, res_child in zip(track, res_track):
                         self.assertEqual(type(child), type(res_child))
                         if isinstance(child, otio.schema.Transition):
-                            self.assertEqual(child.in_offset, res_child.in_offset)
-                            self.assertEqual(child.out_offset, res_child.out_offset)
+                            self.assertEqual(child.in_offset,
+                                             res_child.in_offset)
+                            self.assertEqual(child.out_offset,
+                                             res_child.out_offset)
                             self.assertEqual(
                                 child.transition_type, res_child.transition_type
                             )
                         else:
-                            self.assertEqual(child.source_range, res_child.source_range)
+                            self.assertEqual(child.source_range,
+                                             res_child.source_range)
 
     def test_edl_25fps(self):
         # EXERCISE
@@ -715,7 +733,8 @@ V     C        00:00:00:00 00:00:00:05 00:00:00:00 00:00:00:05
         )
 
     def test_style_edl_read(self):
-        edl_paths = [AVID_EXAMPLE_PATH, NUCODA_EXAMPLE_PATH, PREMIERE_EXAMPLE_PATH]
+        edl_paths = [AVID_EXAMPLE_PATH, NUCODA_EXAMPLE_PATH,
+                     PREMIERE_EXAMPLE_PATH]
         for edl_path in edl_paths:
             fps = 24
             timeline = otio.adapters.read_from_file(edl_path)
@@ -888,8 +907,10 @@ V     C        00:00:00:00 00:00:00:05 00:00:00:00 00:00:00:05
 * FROM FILE: S:/path/to/ZZ100_502A.take_2.0101.exr
 '''
 
-        timeline = otio.adapters.read_from_string(sample_data, adapter_name="cmx_3600")
-        otio_data = otio.adapters.write_to_string(timeline, adapter_name="cmx_3600",
+        timeline = otio.adapters.read_from_string(sample_data,
+                                                  adapter_name="cmx_3600")
+        otio_data = otio.adapters.write_to_string(timeline,
+                                                  adapter_name="cmx_3600",
                                                   style="nucoda")
         self.assertMultiLineEqual(sample_data, otio_data)
 
@@ -1161,6 +1182,7 @@ V     C        00:00:00:00 00:00:00:05 00:00:00:00 00:00:00:05
             tl = otio.adapters.read_from_file(TIMECODE_MISMATCH_TEST)
         with self.assertRaises(cmx_3600.EDLParseError):
             tl = otio.adapters.read_from_file(TIMECODE_MISMATCH_TEST, rate=25)
+
         tl = otio.adapters.read_from_file(
             TIMECODE_MISMATCH_TEST,
             rate=25,
@@ -1188,7 +1210,8 @@ V     C        00:00:00:00 00:00:00:05 00:00:00:00 00:00:00:05
         self.assertEqual(tl.duration().value, 276)
         self.assertEqual(len(tl.tracks[0]), 4)
         self.assertEqual(tl.tracks[0][0].duration().value, 57)
-        self.assertEqual(tl.tracks[0][0].visible_range().duration.value, 57 + 27)
+        self.assertEqual(tl.tracks[0][0].visible_range().duration.value,
+                         57 + 27)
         self.assertEqual(tl.tracks[0][1].in_offset.value, 0)
         self.assertEqual(tl.tracks[0][1].out_offset.value, 27)
         self.assertEqual(tl.tracks[0][2].duration().value, 27)
@@ -1281,11 +1304,13 @@ V     C        00:00:00:00 00:00:00:05 00:00:00:00 00:00:00:05
 
         self.assertEqual(tl.tracks[0][0].duration().value, 30.0)
         self.assertEqual(tl.tracks[0][1].duration().value, 51.0)
-        self.assertEqual(tl.tracks[0][1].visible_range().duration.value, 51 + 35)
+        self.assertEqual(tl.tracks[0][1].visible_range().duration.value,
+                         51 + 35)
         self.assertIsInstance(tl.tracks[0][2], otio.schema.Transition)
         self.assertEqual(tl.tracks[0][2].duration().value, 35.0)
         self.assertEqual(tl.tracks[0][3].duration().value, 81.0)
-        self.assertEqual(tl.tracks[0][3].visible_range().duration.value, 81 + 64)
+        self.assertEqual(tl.tracks[0][3].visible_range().duration.value,
+                         81 + 64)
         self.assertIsInstance(tl.tracks[0][4], otio.schema.Transition)
         self.assertEqual(tl.tracks[0][4].duration().value, 64.0)
         self.assertEqual(tl.tracks[0][5].duration().value, 84.0)

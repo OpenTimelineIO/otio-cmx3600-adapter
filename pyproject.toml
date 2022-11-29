@@ -11,7 +11,7 @@ description = "OpenTimelineIO CMX 3600 EDL Adapter"
 authors = [
   { name="Contributors to the OpenTimelineIO project", email="otio-discussion@lists.aswf.io" },
 ]
-license = { file="LICENSE-APACHE-20" }
+license = { file="LICENSE" }
 readme = "README.md"
 requires-python = ">=3.7"
 dependencies = [

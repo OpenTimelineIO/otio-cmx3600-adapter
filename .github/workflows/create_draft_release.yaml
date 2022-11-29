@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     env:
-      plugin_name: "otio_template_plugin"
+      plugin_name: "otio-cmx3600-adapter"
 
     name: Create Release
     runs-on: ubuntu-latest
@@ -22,7 +22,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
         with:
           tag_name: ${{ github.ref }}
-          release_name: otio-template-plugin{{ github.ref }}
+          release_name: otio-cmx3600-adapter{{ github.ref }}
           body: |
             Changes in this release
             * something
