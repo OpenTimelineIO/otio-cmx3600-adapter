@@ -28,9 +28,9 @@ The following features of OTIO are supported by the `cmx_3600` adapter:
 # Style Variations
 The `cmx_3600` adapter supports writing EDL's with slight variations required by 
 certain applications. At the moment the supported styles are:
-* avid (default)
-* nocuda
-* premiere
+* `avid` = [Avid Media Composer](https://www.avid.com/media-composer) (default)
+* `nucoda` = [Nucoda](https://digitalvision.world/products/nucoda/)
+* `premiere` = [Adobe Premiere Pro](https://www.adobe.com/products/premiere.html)
 
 
 ## Main Functions
@@ -72,7 +72,7 @@ except EDLParseError:
 Writes a CMX Edit Decision List (EDL) to a string.  
 This function introduces `style` and `reelname_len` parameters.  
 The `style` parameter let's you produce slight variations of EDL's 
-(avid by default). Other supported styles are "nocuda" and "premiere".  
+(`avid` by default). Other supported styles are "nucoda" and "premiere".  
 The `reelname_len` parameter lets you determine how many characters are in the 
 reel name of the EDL (default is 8). Setting it to `None` will not set a limit 
 of characters.
@@ -80,12 +80,12 @@ of characters.
 
 # EDL References
 
-- [Full specification](http://xmil.biz/EDL-X/CMX3600.pdf): SMPTE 258M-2004 "For Television −− Transfer of Edit Decision Lists"
+- Full specification: [SMPTE 258M-2004 "For Television −− Transfer of Edit Decision Lists"](https://ieeexplore.ieee.org/document/7291839) (See also [this older document](http://xmil.biz/EDL-X/CMX3600.pdf))
 - [Reference](https://prohelp.apple.com/finalcutpro_help-r01/English/en/finalcutpro/usermanual/chapter_96_section_0.html)
 
 
 # License
-OpenTimelineIO and the "cmx_3600" adapter is open source software. Please see the [LICENSE](LICENSE) 
+OpenTimelineIO and the "cmx_3600" adapter are open source software. Please see the [LICENSE](LICENSE) 
 for details.
 
 Nothing in the license file or this project grants any right to use Pixar or any other contributor’s trade names, trademarks, service marks, or product names.
