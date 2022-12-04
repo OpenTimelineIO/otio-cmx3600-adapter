@@ -102,3 +102,4 @@ please see: https://opentimelineio.readthedocs.io/en/latest/tutorials/contributi
 For more information, please visit http://opentimeline.io/
 or https://github.com/AcademySoftwareFoundation/OpenTimelineIO
 or join our discussion forum: https://lists.aswf.io/g/otio-discussion
+
