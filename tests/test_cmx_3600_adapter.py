@@ -15,6 +15,10 @@ import opentimelineio.test_utils as otio_test_utils
 from tempfile import TemporaryDirectory  # noqa: F401
 import tempfile
 
+os.environ['OTIO_PLUGIN_MANIFEST_PATH'] = os.pathsep.join(
+    ["$OTIO_PLUGIN_MANIFEST_PATH", "../src/otio_cmx3600_adapter/plugin_manifest.json"]
+)
+
 # We import the cmx_3600 module this way to make sure the EDLParseError defined
 # in the module is properly caught. Importing the module and error directly
 # doesn't get accepted as the same exception when asserting in the

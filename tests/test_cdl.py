@@ -12,6 +12,10 @@ __doc__ = """Test CDL support in the EDL adapter."""
 SAMPLE_DATA_DIR = os.path.join(os.path.dirname(__file__), "sample_data")
 CDL_EXAMPLE_PATH = os.path.join(SAMPLE_DATA_DIR, "cdl.edl")
 
+os.environ['OTIO_PLUGIN_MANIFEST_PATH'] = os.pathsep.join(
+    ["$OTIO_PLUGIN_MANIFEST_PATH", "../src/otio_cmx3600_adapter/plugin_manifest.json"]
+)
+
 
 class CDLAdapterTest(unittest.TestCase):
     def test_cdl_read(self):
