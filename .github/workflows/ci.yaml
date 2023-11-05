@@ -21,7 +21,7 @@ jobs:
       matrix:
         python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
         os: [ubuntu-latest, macos-latest, windows-latest]
-        otio-version: ["extract_adapters"]
+        otio-version: ["0.17.0.dev1"]
         # TODO Once we have landed extracted adapters we replace otio-version
         #otio-version: ["0.15.0", "main"]
 
@@ -46,8 +46,6 @@ jobs:
           python -m pip install --upgrade pip
           if [[ "${{ matrix.otio-version }}" == "main" ]]; then
             pip install "git+https://github.com/AcademySoftwareFoundation/OpenTimelineIO.git"
-          elif [[ "${{ matrix.otio-version }}" == "extract_adapters" ]]; then
-            pip install "git+https://github.com/AcademySoftwareFoundation/OpenTimelineIO.git@${{ matrix.otio-version }}"
           else
             pip install -V OpenTimelineIO==${{ matrix.otio-version }}
           fi
