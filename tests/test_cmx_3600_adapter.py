@@ -7,13 +7,13 @@
 
 # python
 import os
+import tempfile
 import unittest
+from tempfile import TemporaryDirectory  # noqa: F401
 
 import opentimelineio as otio
 import opentimelineio.test_utils as otio_test_utils
 
-from tempfile import TemporaryDirectory  # noqa: F401
-import tempfile
 
 # We import the cmx_3600 module this way to make sure the EDLParseError defined
 # in the module is properly caught. Importing the module and error directly
@@ -635,7 +635,6 @@ V     C        00:00:00:00 00:00:00:05 00:00:00:00 00:00:00:05
         clip_b = track[2]
         self.assertEqual(clip_b.duration().value, 10 + 1)
         self.assertEqual(clip_b.visible_range().duration.value, 10 + 1)
-
 
     def test_fade_to_black(self):
         # EXERCISE

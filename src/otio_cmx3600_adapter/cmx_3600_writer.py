@@ -23,8 +23,7 @@ from opentimelineio import (
     opentime,
 )
 
-from otio_cmx3600_adapter.exceptions import EDLParseError
-from otio_cmx3600_adapter import cmx_3600_bin
+from .exceptions import EDLParseError
 
 
 # regex for parsing the playback speed of an M2 event
@@ -787,8 +786,6 @@ def read_from_string(input_str, rate=24, ignore_timecode_mismatch=False):
     )
     result = parser.timeline
     return result
-
-read_from_string = cmx_3600_bin.read_from_string
 
 
 def write_to_string(input_otio, rate=None, style='avid', reelname_len=8):

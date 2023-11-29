@@ -1,6 +1,6 @@
 import opentimelineio as otio
 
-from otio_cmx3600_adapter import cmx_3600_bin
+from otio_cmx3600_adapter import cmx_3600_reader
 from otio_cmx3600_adapter import edl_parser
 
 
@@ -12,7 +12,7 @@ def test_comment_processing_single_clip():
 *SOURCE FILE: A009C022_210414B3
 """
     statement_gen = edl_parser.statements_from_string(comments_string)
-    event_comments = cmx_3600_bin.EventComments(statement_gen, edl_rate=24)
+    event_comments = cmx_3600_reader.EventComments(statement_gen, edl_rate=24)
 
     assert event_comments.handled == {
         'asc_sat': 1.0,
@@ -41,7 +41,7 @@ def test_comment_processing_transition():
 *SOURCE FILE: D001C003_210414A7
 """
     statement_gen = edl_parser.statements_from_string(comments_string)
-    event_comments = cmx_3600_bin.EventComments(statement_gen, edl_rate=24)
+    event_comments = cmx_3600_reader.EventComments(statement_gen, edl_rate=24)
 
     assert event_comments.handled == {
         'asc_sat': 1.0,

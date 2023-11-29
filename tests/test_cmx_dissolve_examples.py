@@ -1,14 +1,14 @@
 import opentimelineio as otio
 from opentimelineio import opentime
 
-from otio_cmx3600_adapter import cmx_3600_bin
+from otio_cmx3600_adapter import cmx_3600_reader
 
 
 def test_cmx_dissolve_case_1():
     transition_events = """001  001                B     C        02:00:00:00 02:00:00:00 01:00:00:00  01:00:00:00
     001  002                B     D    030 03:00:00:00 03:00:10:00 01:00:00:00  01:00:10:00
     """
-    tl = cmx_3600_bin.read_from_string(transition_events, rate=30)
+    tl = cmx_3600_reader.read_from_string(transition_events, rate=30)
     otio.adapters.write_to_file(tl, "/tmp/dissolve_1.otio")
 
     track = tl.tracks[0]
@@ -41,7 +41,7 @@ def test_cmx_dissolve_case_2():
     transition_events = """002  001                B     C        02:00:00:00 02:00:00:00 01:00:00:00  01:00:00:00
     002  002                B     D    030 03:00:00:00 03:00:10:00 01:00:00:00  01:00:10:00
     """
-    tl = cmx_3600_bin.read_from_string(transition_events, rate=30)
+    tl = cmx_3600_reader.read_from_string(transition_events, rate=30)
     otio.adapters.write_to_file(tl, "/tmp/dissolve_2.otio")
 
     track = tl.tracks[0]
@@ -76,7 +76,7 @@ def test_cmx_wipe_case_3():
     transition_events = """003  001                B     C        02:00:00:00 02:00:09:00 01:00:00:00  01:00:09:00
     003  002                B     W019 030 03:00:00:00 03:00:01:00 01:00:09:00  01:00:10:00
     """
-    tl = cmx_3600_bin.read_from_string(transition_events, rate=30)
+    tl = cmx_3600_reader.read_from_string(transition_events, rate=30)
     otio.adapters.write_to_file(tl, "/tmp/dissolve_3.otio")
 
     track = tl.tracks[0]
@@ -111,7 +111,7 @@ def test_cmx_dissolve_case_4():
     transition_events = """004  001                B     C        02:00:00:00 02:00:08:00 01:00:00:00  01:00:08:00
     004  002                B     D    030 03:00:00:00 03:00:02:00 01:00:08:00  01:00:10:00
     """
-    tl = cmx_3600_bin.read_from_string(transition_events, rate=30)
+    tl = cmx_3600_reader.read_from_string(transition_events, rate=30)
     otio.adapters.write_to_file(tl, "/tmp/dissolve_4.otio")
 
     track = tl.tracks[0]
@@ -144,7 +144,7 @@ def test_cmx_dissolve_case_5():
     transition_events = """006  001                B     C        02:00:00:00 02:00:00:00 01:00:00:00  01:00:00:00
     006  002                B     D    255 03:00:00:00 03:00:08:15 01:00:00:00  01:00:08:15
     """
-    tl = cmx_3600_bin.read_from_string(transition_events, rate=30)
+    tl = cmx_3600_reader.read_from_string(transition_events, rate=30)
     otio.adapters.write_to_file(tl, "/tmp/dissolve_7.otio")
 
     track = tl.tracks[0]
@@ -179,7 +179,7 @@ def test_cmx_dissolve_case_6():
     transition_events = """007  001                B     C        02:00:00:00 02:00:00:00 01:00:00:00  01:00:00:00
     007  002                B     D    225 03:00:00:00 03:00:10:00 01:00:00:00  01:00:10:00
     """
-    tl = cmx_3600_bin.read_from_string(transition_events, rate=30)
+    tl = cmx_3600_reader.read_from_string(transition_events, rate=30)
 
     track = tl.tracks[0]
     first_clip = track[0]
@@ -215,7 +215,7 @@ def test_cmx_dissolve_case_7():
     transition_events = """001  001                B     C        02:00:00:00 02:00:05:00 01:00:00:00  01:00:05:00
     001  002                B     D    030 03:00:00:00 03:00:05:00 01:00:05:00  01:00:10:00
     """
-    tl = cmx_3600_bin.read_from_string(transition_events, rate=30)
+    tl = cmx_3600_reader.read_from_string(transition_events, rate=30)
 
     track = tl.tracks[0]
     first_clip = track[0]
