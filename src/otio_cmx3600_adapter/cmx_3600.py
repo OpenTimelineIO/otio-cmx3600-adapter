@@ -23,9 +23,8 @@ from opentimelineio import (
     opentime,
 )
 
-
-class EDLParseError(exceptions.OTIOError):
-    pass
+from otio_cmx3600_adapter.exceptions import EDLParseError
+from otio_cmx3600_adapter import cmx_3600_bin
 
 
 # regex for parsing the playback speed of an M2 event
@@ -609,13 +608,13 @@ class ClipHandler:
             # Double check it is a cut
             if edit_type not in ["C"]:
                 raise EDLParseError(
-                    'incorrect edit type {} in form statement: {}'.format(
+                    'incorrect edit type {} in form identifier: {}'.format(
                         edit_type, line,
                     )
                 )
         else:
             raise EDLParseError(
-                'incorrect number of fields [{}] in form statement: {}'
+                'incorrect number of fields [{}] in form identifier: {}'
                 ''.format(field_count, line))
 
         # Frame numbers (not just timecode) are ok
@@ -744,10 +743,7 @@ class CommentHandler:
 
                 # Special case for locators. There can be multiple locators per clip.
                 if comment_type == 'locators':
-                    try:
-                        self.handled[comment_type].append(comment_body)
-                    except KeyError:
-                        self.handled[comment_type] = [comment_body]
+                    self.handled.setdefault(comment_type, []).append(comment_body)
 
                 else:
                     self.handled[comment_type] = comment_body
@@ -792,6 +788,8 @@ def read_from_string(input_str, rate=24, ignore_timecode_mismatch=False):
     result = parser.timeline
     return result
 
+read_from_string = cmx_3600_bin.read_from_string
+
 
 def write_to_string(input_otio, rate=None, style='avid', reelname_len=8):
     # TODO: We should have convenience functions in Timeline for this?
@@ -826,17 +824,21 @@ def write_to_string(input_otio, rate=None, style='avid', reelname_len=8):
         # Assume all rates are the same as the 1st track's
         rate=rate or input_otio.tracks[0].duration().rate,
         style=style,
-        reelname_len=reelname_len
+        global_start_time=input_otio.global_start_time,
+        reelname_len=reelname_len,
     )
 
     return writer.get_content_for_track_at_index(0, title=input_otio.name)
 
 
 class EDLWriter:
-    def __init__(self, tracks, rate, style, reelname_len=8):
+    def __init__(
+            self, tracks, rate, style, global_start_time=None, reelname_len=8
+    ):
         self._tracks = tracks
         self._rate = rate
         self._style = style
+        self._global_start_time = global_start_time
         self._reelname_len = reelname_len
 
         if style not in VALID_EDL_STYLES:
@@ -906,6 +908,7 @@ class EDLWriter:
                         child,
                         self._tracks,
                         track.kind,
+                        self._global_start_time,
                         self._rate,
                         self._style,
                         self._reelname_len
@@ -918,6 +921,7 @@ class EDLWriter:
                             child,
                             self._tracks,
                             track.kind,
+                            self._global_start_time,
                             self._rate,
                             self._style,
                             self._reelname_len
@@ -975,10 +979,12 @@ class Event:
         clip,
         tracks,
         kind,
+        global_start_time,
         rate,
         style,
         reelname_len
     ):
+        self.global_start_time = global_start_time
 
         # Premiere style uses AX for the reel name
         if style == 'premiere':
@@ -999,14 +1005,21 @@ class Event:
                     line.source_in.rate
                 )
             elif timing_effect.effect_name == "LinearTimeWarp":
-                value = clip.trimmed_range().duration.value / timing_effect.time_scalar
+                value = clip.trimmed_range().duration.value * timing_effect.time_scalar
                 line.source_out = (
                     line.source_in + opentime.RationalTime(value, rate))
 
-        range_in_timeline = clip.transformed_time_range(
-            clip.trimmed_range(),
-            tracks
-        )
+        # The old EDL parser used available_range on tracks to set
+        # the global start, n
+        if self.global_start_time is not None:
+            start_offset = opentime.TimeTransform(offset=global_start_time)
+            range_in_timeline = start_offset.applied_to(clip.trimmed_range_in_parent())
+        else:
+            range_in_timeline = clip.transformed_time_range(
+                clip.trimmed_range(),
+                tracks
+            )
+
         line.record_in = range_in_timeline.start_time
         line.record_out = range_in_timeline.end_time_exclusive()
         self.line = line
@@ -1053,11 +1066,11 @@ class DissolveEvent:
         b_side_clip,
         tracks,
         kind,
+        global_start_time,
         rate,
         style,
         reelname_len
     ):
-        # Note: We don't make the A-Side event line here as it is represented
         # by its own event (edit number).
 
         cut_line = EventLine(kind, rate)
@@ -1092,10 +1105,20 @@ class DissolveEvent:
         )
         dslve_line.source_in = b_side_clip.source_range.start_time
         dslve_line.source_out = b_side_clip.source_range.end_time_exclusive()
-        range_in_timeline = b_side_clip.transformed_time_range(
-            b_side_clip.trimmed_range(),
-            tracks
-        )
+
+        # The old EDL parser used available_range on tracks to set
+        # the global start, n
+        if global_start_time is not None:
+            start_offset = opentime.TimeTransform(offset=global_start_time)
+            range_in_timeline = start_offset.applied_to(
+                b_side_clip.trimmed_range_in_parent()
+            )
+        else:
+            range_in_timeline = b_side_clip.transformed_time_range(
+                b_side_clip.trimmed_range(),
+                tracks
+            )
+
         dslve_line.record_in = range_in_timeline.start_time
         dslve_line.record_out = range_in_timeline.end_time_exclusive()
         dslve_line.dissolve_length = transition.out_offset
@@ -1112,6 +1135,8 @@ class DissolveEvent:
         self.a_side_event = a_side_event
         self.transition = transition
         self.b_side_clip = b_side_clip
+
+        # Note: We don't make the A-Side event line here as it is represented
 
         # Expose so that any subsequent dissolves can borrow their values.
         self.clip = b_side_clip
