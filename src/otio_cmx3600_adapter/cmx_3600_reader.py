@@ -31,6 +31,7 @@ from .edl_statement import (
     StandardFormStatement,
 )
 
+
 METADATA_NAMESPACE = "cmx_3600"
 
 
@@ -97,7 +98,7 @@ class EventComments:
         (NoteFormStatement.NoteFormIdentifiers.TO_CLIP_NAME, "dest_clip_name"),
         (NoteFormStatement.NoteFormIdentifiers.FROM_CLIP, "media_reference"),
         (NoteFormStatement.NoteFormIdentifiers.FROM_FILE, "media_reference"),
-        #(NoteFormStatement.NoteFormIdentifiers.SOURCE_FILE, "media_reference"),
+        # (NoteFormStatement.NoteFormIdentifiers.SOURCE_FILE, "media_reference"),
         (NoteFormStatement.NoteFormIdentifiers.LOC, "locators"),
         (NoteFormStatement.NoteFormIdentifiers.ASC_SOP, "asc_sop"),
         (NoteFormStatement.NoteFormIdentifiers.ASC_SAT, "asc_sat"),
@@ -250,8 +251,9 @@ class EDLReader:
             ignore_record_timeline_errors: If a record timecode is invalid,
              drops the frame count off the end and uses that value (floor to the nearest second)
         """
-        self.current_timeline: otio.schema.Timeline = otio.schema.Timeline()
-        self.timelines: list[otio.schema.Timeline] = [self.current_timeline]
+        self.timelines: list[otio.schema.Timeline] = []
+        self.current_timeline = otio.schema.Timeline()
+        self.tracks_by_name = {}
         # We set this as a flag rather than checking
         # current_timeline.global_start_time is None because if the first
         # timecode is unparsable we don't want to put an incorrect timecode in
@@ -260,6 +262,25 @@ class EDLReader:
         self._edl_rate = edl_rate
         self.ignore_timecode_mismatch = ignore_timecode_mismatch
         self.ignore_invalid_timecode_errors = ignore_invalid_timecode_errors
+
+    @property
+    def current_timeline(self) -> otio.schema.Timeline:
+        return self._current_timeline
+
+    @current_timeline.setter
+    def current_timeline(self, new_timeline: otio.schema.Timeline):
+        self.timelines.append(new_timeline)
+        self._current_timeline = new_timeline
+        self.tracks_by_name = {
+            track.name: track for track in new_timeline.tracks
+        }
+        self.handled_timeline_init = False
+        self.current_timeline_start_offset = None
+
+    def add_track(self, track: otio.schema.Track):
+        # For performance reasons, we want to cache the tracks_by_name mapping
+        self._current_timeline.tracks.append(track)
+        self.tracks_by_name[track.name] = track
 
     def load_from_statements(self, statements: Iterator[EDLStatement]):
         tc_force_drop = False
@@ -280,9 +301,6 @@ class EDLReader:
                     # a new title
                     if self.current_timeline.name and self.current_timeline.name != statement.data:
                         self.current_timeline = otio.schema.Timeline()
-                        self.timelines.append(self.current_timeline)
-                        self.handled_timeline_init = False
-                        self.current_timeline_start_offset = None
                     self.current_timeline.name = statement.data
                     continue
 
@@ -334,7 +352,10 @@ class EDLReader:
             name=statement.edit_number,
             media_reference=media_ref,
         )
-        cmx_metadata = clip.metadata.setdefault(METADATA_NAMESPACE, {})
+        cmx_metadata = {}
+        clip_metadata = {
+            METADATA_NAMESPACE: cmx_metadata
+        }
 
         # Copy metadata
         if is_from_clip:
@@ -344,7 +365,7 @@ class EDLReader:
                 sop = event_comments.handled.get("asc_sop", EventComments.DEFAULT_ASC_SOP)
                 sat = event_comments.handled.get("asc_sat", EventComments.DEFAULT_ASC_SAT)
 
-                clip.metadata["cdl"] = dict(asc_sat=sat, asc_sop=sop)
+                clip_metadata["cdl"] = dict(asc_sat=sat, asc_sop=sop)
 
             if "locators" in event_comments.handled:
                 clip.markers.extend(event_comments.handled["locators"])
@@ -376,6 +397,8 @@ class EDLReader:
             "record_tc_out": statement.sync_exit,
         }
         cmx_metadata["events"] = [statement.edit_number]
+
+        clip.metadata.update(clip_metadata)
 
         return clip
 
@@ -660,11 +683,6 @@ class EDLReader:
             timeline_range = self.resolve_timings_for_event_items(edit_items)
             self.place_items_in_timeline(edit_items, timeline_range, channels)
 
-    def tracks_by_name(self) -> Mapping[str, otio.schema.Track]:
-        return {
-            track.name: track for track in self.current_timeline.tracks
-        }
-
     def tracks_for_channel(self, channel_code):
         # Expand channel shorthand into a list of track names.
         if channel_code in CHANNEL_MAP:
@@ -674,16 +692,15 @@ class EDLReader:
 
         # Get the tracks, creating any channels we don't already have
         out_tracks = []
-        tracks_by_name = self.tracks_by_name()
         for track_name in track_names:
             try:
-                track = tracks_by_name[track_name]
+                track = self.tracks_by_name[track_name]
             except KeyError:
                 track = otio.schema.Track(
                     name=track_name,
                     kind=_guess_kind_for_track_name(track_name)
                 )
-                self.current_timeline.tracks.append(track)
+                self.add_track(track)
 
             out_tracks.append(track)
 
@@ -695,32 +712,13 @@ class EDLReader:
     ):
         # Find the candidate track
         candidate_tracks: list[otio.schema.Track] = self.tracks_for_channel(channels)
-        for track in candidate_tracks:
-            children = track.children_in_range(timeline_range)
-            # TODO: If all the children found are Gaps, they could be
-            #   replaced with the items with correct surrounding gaps below
-            #   additionally, in the case of video, we could add another track
-            #   for overwrites
-            if len(children) > 0:
-                events = sorted(
-                    set(
-                        itertools.chain.from_iterable(
-                            item.metadata.get(METADATA_NAMESPACE, {}).get("events")
-                            for item in items
-                        )
-                    )
-                )
-                raise EDLParseError(
-                    f"Overlapping record in value for event(s) {', '.join(events)}"
-                )
-
         if self.current_timeline_start_offset is None:
             self.current_timeline_start_offset = timeline_range.start_time
 
         for destination_track in candidate_tracks:
             # Make sure the gap properly offsets items in the track
             relative_start_time = timeline_range.start_time - self.current_timeline_start_offset
-            if relative_start_time != destination_track.duration():
+            if relative_start_time > destination_track.duration():
                 destination_track.append(
                     otio.schema.Gap(
                         source_range=opentime.TimeRange(
@@ -729,31 +727,51 @@ class EDLReader:
                         )
                     )
                 )
-            elif _should_merge_clip_to_track(items[0], destination_track):
-                # extend the source range of the first clip by the second clip
-                # duration, add the second clip's event numbers and discard the
-                # second clip
-                appending_clip = items[0]
-                existing_clip = destination_track[-1]
-                added_time = appending_clip.source_range.duration.rescaled_to(
-                    existing_clip.source_range.duration.rate
-                )
-                existing_clip.source_range = opentime.TimeRange(
-                    start_time=existing_clip.source_range.start_time,
-                    duration=existing_clip.source_range.duration + added_time,
-                )
-                appending_cmx_metadata = appending_clip.metadata[METADATA_NAMESPACE]
-                existing_events = existing_clip.metadata[METADATA_NAMESPACE].get("events", [])
-                for event_number in appending_cmx_metadata.get("events", []):
-                    if event_number not in existing_events:
-                        existing_events.append(event_number)
+            else:
+                if relative_start_time < destination_track.duration():
+                    children = destination_track.children_in_range(timeline_range)
+                    # TODO: If all the children found are Gaps, they could be
+                    #   replaced with the items with correct surrounding gaps below
+                    #   additionally, in the case of video, we could add another track
+                    #   for overwrites
+                    if len(children) > 0:
+                        events = sorted(
+                            set(
+                                itertools.chain.from_iterable(
+                                    item.metadata.get(METADATA_NAMESPACE, {}).get("events")
+                                    for item in items
+                                )
+                            )
+                        )
+                        raise EDLParseError(
+                            f"Overlapping record in value for event(s) {', '.join(events)}"
+                        )
+                elif _should_merge_clip_to_track(items[0], destination_track):
+                    # extend the source range of the first clip by the second clip
+                    # duration, add the second clip's event numbers and discard the
+                    # second clip
+                    appending_clip = items[0]
+                    existing_clip = destination_track[-1]
+                    added_time = appending_clip.duration().rescaled_to(
+                        existing_clip.duration().rate
+                    )
+                    existing_clip.source_range = opentime.TimeRange(
+                        start_time=existing_clip.source_range.start_time,
+                        duration=existing_clip.duration() + added_time,
+                    )
+                    appending_cmx_metadata = appending_clip.metadata[METADATA_NAMESPACE]
+                    existing_events = existing_clip.metadata[METADATA_NAMESPACE].get("events", [])
+                    for event_number in appending_cmx_metadata.get("events", []):
+                        if event_number not in existing_events:
+                            existing_events.append(event_number)
 
-                existing_clip.metadata[METADATA_NAMESPACE]["events"] = existing_events
-                items = items[1:]
+                    existing_clip.metadata[METADATA_NAMESPACE]["events"] = existing_events
+                    items = items[1:]
 
-            destination_track.extend(copy.deepcopy(items))
-
-
+            if len(candidate_tracks) > 1:
+                destination_track.extend(copy.deepcopy(items))
+            else:
+                destination_track.extend(items)
 
     def resolve_timings_for_event_items(
             self, items: list[Union[otio.schema.Clip, otio.schema.Transition]]

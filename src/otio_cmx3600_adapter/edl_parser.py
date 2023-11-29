@@ -43,10 +43,9 @@ def _note_form_statement_from_line(
 ) -> NoteFormStatement:
     statement_match = NoteFormStatement.STATEMENT_RE.match(line)
     if statement_match is not None:
-        match_groups = statement_match.groupdict()
         return NoteFormStatement(
-            statement_text=match_groups["statement_value"],
-            is_comment=bool(match_groups["is_comment"]),
+            statement_text=statement_match.group("statement_value"),
+            is_comment=bool(statement_match.group("is_comment")),
             **element_kwargs,
         )
     return NoteFormStatement(
@@ -77,10 +76,11 @@ def statements_from_lines(edl_lines: Iterable[str]) -> Iterator[EDLStatement]:
         did_have_edit_number = False
         if edit_number_match:
             did_have_edit_number = True
-            elements = edit_number_match.groupdict()
-            edit_number = elements["edit_number_subfield"]
-            is_virtual_edit = bool(elements["virtual_edit_indicator"])
-            is_recorded = bool(elements["recorded_indicator"])
+            edit_number = edit_number_match.group("edit_number_subfield")
+            is_virtual_edit = bool(
+                edit_number_match.group("virtual_edit_indicator")
+            )
+            is_recorded = bool(edit_number_match.group("recorded_indicator"))
 
             # Consume the field
             consuming_line = consuming_line[edit_number_match.end():]

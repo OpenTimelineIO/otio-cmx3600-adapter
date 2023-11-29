@@ -12,6 +12,7 @@ import re
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import Enum
+from functools import cached_property
 from typing import Optional
 
 from .exceptions import EDLParseError
@@ -83,7 +84,7 @@ class Effect:
             wipe_match = effect.WIPE_RE.match(statement.edit_type)
             if wipe_match:
                 effect.type = EffectType.WIPE
-                effect.wipe_type = wipe_match.groupdict()["wipe_type"]
+                effect.wipe_type = wipe_match.group("wipe_type")
             else:
                 raise e
 
@@ -125,11 +126,10 @@ class MotionDirective:
                 f"Unsupported M2 Effect format: '{motion_directive}'"
             )
 
-        group_dict = match.groupdict()
         return cls(
-            reel=group_dict["reel"],
-            speed=Decimal(group_dict["speed"]),
-            trigger=group_dict["trigger"],
+            reel=match.group("reel"),
+            speed=Decimal(match.group("speed")),
+            trigger=match.group("trigger"),
         )
 
 
@@ -227,26 +227,27 @@ class NoteFormStatement(EDLStatement):
     )
 
     @classmethod
-    def identifiers(cls) -> set[str]:
+    def identifiers(cls) -> list[str]:
         try:
-            return cls._identifers
+            return cls._identifiers
         except AttributeError:
-            # We do this from longest to shortest so that statements like
-            # FROM CLIP NAME:
-            # Aren't matched against the
-            # FROM CLIP:
-            # identifier.
-            # In future we may want to get more explicit about calling out which
-            # identifiers expect a : and which don't.
-            cls._identifers = sorted(
-                (identifier.value for identifier in cls.NoteFormIdentifiers),
-                reverse=True,
-            )
+            pass
 
+        # We do this from longest to shortest so that statements like
+        # FROM CLIP NAME:
+        # Aren't matched against the
+        # FROM CLIP:
+        # identifier.
+        # In future we may want to get more explicit about calling out which
+        # identifiers expect a : and which don't.
+        cls._identifiers = sorted(
+            (identifier.value for identifier in cls.NoteFormIdentifiers),
+            reverse=True,
+        )
 
-        return cls._identifers
+        return cls._identifiers
 
-    @property
+    @cached_property
     def identifier(self) -> str:
         for identifier in self.identifiers():
             if self.statement_text.startswith(identifier):
