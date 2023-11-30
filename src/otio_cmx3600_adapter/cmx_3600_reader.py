@@ -40,19 +40,19 @@ METADATA_NAMESPACE = "cmx_3600"
 # This channel_map tells you which track to use for each channel shorthand.
 # Channels not listed here are used as track names verbatim.
 CHANNEL_MAP = {
-    'A': ['A1'],
-    'AA': ['A1', 'A2'],
-    'B': ['V', 'A1'],
-    'A2/V': ['V', 'A2'],
-    'AA/V': ['V', 'A1', 'A2']
+    "A": ["A1"],
+    "AA": ["A1", "A2"],
+    "B": ["V", "A1"],
+    "A2/V": ["V", "A2"],
+    "AA/V": ["V", "A1", "A2"],
 }
 
 
 def read_from_string(
-        input_str,
-        rate=24,
-        ignore_timecode_mismatch=False,
-        ignore_invalid_timecode_errors=False,
+    input_str,
+    rate=24,
+    ignore_timecode_mismatch=False,
+    ignore_invalid_timecode_errors=False,
 ):
     reader = EDLReader(
         edl_rate=rate,
@@ -93,20 +93,22 @@ class EventComments:
     # 'FROM CLIP' or 'FROM FILE' is a required comment to link media
     # An exception is raised if both 'FROM CLIP' and 'FROM FILE' are found
     # needs to be ordered so that FROM CLIP NAME gets matched before FROM CLIP
-    HANDLED_NOTE_STATEMENTS = collections.OrderedDict([
-        (NoteFormStatement.NoteFormIdentifiers.FROM_CLIP_NAME, "clip_name"),
-        (NoteFormStatement.NoteFormIdentifiers.TO_CLIP_NAME, "dest_clip_name"),
-        (NoteFormStatement.NoteFormIdentifiers.FROM_CLIP, "media_reference"),
-        (NoteFormStatement.NoteFormIdentifiers.FROM_FILE, "media_reference"),
-        # (NoteFormStatement.NoteFormIdentifiers.SOURCE_FILE, "media_reference"),
-        (NoteFormStatement.NoteFormIdentifiers.LOC, "locators"),
-        (NoteFormStatement.NoteFormIdentifiers.ASC_SOP, "asc_sop"),
-        (NoteFormStatement.NoteFormIdentifiers.ASC_SAT, "asc_sat"),
-        (NoteFormStatement.NoteFormIdentifiers.FREEZE_FRAME, "freeze_frame"),
-        (NoteFormStatement.NoteFormIdentifiers.OTIO_REFERENCE, "media_reference"),
-    ])
+    HANDLED_NOTE_STATEMENTS = collections.OrderedDict(
+        [
+            (NoteFormStatement.NoteFormIdentifiers.FROM_CLIP_NAME, "clip_name"),
+            (NoteFormStatement.NoteFormIdentifiers.TO_CLIP_NAME, "dest_clip_name"),
+            (NoteFormStatement.NoteFormIdentifiers.FROM_CLIP, "media_reference"),
+            (NoteFormStatement.NoteFormIdentifiers.FROM_FILE, "media_reference"),
+            # (NoteFormStatement.NoteFormIdentifiers.SOURCE_FILE, "media_reference"),
+            (NoteFormStatement.NoteFormIdentifiers.LOC, "locators"),
+            (NoteFormStatement.NoteFormIdentifiers.ASC_SOP, "asc_sop"),
+            (NoteFormStatement.NoteFormIdentifiers.ASC_SAT, "asc_sat"),
+            (NoteFormStatement.NoteFormIdentifiers.FREEZE_FRAME, "freeze_frame"),
+            (NoteFormStatement.NoteFormIdentifiers.OTIO_REFERENCE, "media_reference"),
+        ]
+    )
 
-    ASC_SOP_REGEX = re.compile(r'([+-]*\d+\.\d+)')
+    ASC_SOP_REGEX = re.compile(r"([+-]*\d+\.\d+)")
 
     DEFAULT_ASC_SOP = dict(
         slope=[1.0] * 3,
@@ -183,48 +185,34 @@ class EventComments:
                 power=[float(v) for v in asc_sop_values[6:9]],
             )
         else:
-            raise EDLParseError(
-                f'Invalid ASC_SOP found: {sop_data}'
-            )
+            raise EDLParseError(f"Invalid ASC_SOP found: {sop_data}")
 
         return asc_sop
 
     def marker_for_locator_comment(
-            self, statement: NoteFormStatement
+        self, statement: NoteFormStatement
     ) -> Optional[otio.schema.Marker]:
         # An example EDL locator line looks like this:
         # * LOC: 01:00:01:14 RED     ANIM FIX NEEDED
-        m = re.match(
-            r'(\d\d:\d\d:\d\d:\d\d)\s+(\w*)(\s+|$)(.*)',
-            statement.data
-        )
+        m = re.match(r"(\d\d:\d\d:\d\d:\d\d)\s+(\w*)(\s+|$)(.*)", statement.data)
         if not m:
             # TODO: Should we report this as a warning somehow?
             return None
 
         marker = otio.schema.Marker()
         marker.marked_range = otio.opentime.TimeRange(
-            start_time=from_timecode_approx(
-                m.group(1), self.edl_rate, True
-            ),
-            duration=opentime.RationalTime()
+            start_time=from_timecode_approx(m.group(1), self.edl_rate, True),
+            duration=opentime.RationalTime(),
         )
 
         # always write the source value into metadata, in case it
         # is not a valid enum somehow.
         color_parsed_from_file = m.group(2)
 
-        marker.metadata.update({
-            METADATA_NAMESPACE: {
-                "color": color_parsed_from_file
-            }
-        })
+        marker.metadata.update({METADATA_NAMESPACE: {"color": color_parsed_from_file}})
 
         # @TODO: if it is a valid
-        if hasattr(
-                otio.schema.MarkerColor,
-                color_parsed_from_file.upper()
-        ):
+        if hasattr(otio.schema.MarkerColor, color_parsed_from_file.upper()):
             marker.color = color_parsed_from_file.upper()
         else:
             marker.color = otio.schema.MarkerColor.RED
@@ -241,7 +229,10 @@ class EDLReader:
     )
 
     def __init__(
-            self, edl_rate=24, ignore_timecode_mismatch=False, ignore_invalid_timecode_errors=False
+        self,
+        edl_rate=24,
+        ignore_timecode_mismatch=False,
+        ignore_invalid_timecode_errors=False,
     ):
         """
 
@@ -271,9 +262,7 @@ class EDLReader:
     def current_timeline(self, new_timeline: otio.schema.Timeline):
         self.timelines.append(new_timeline)
         self._current_timeline = new_timeline
-        self.tracks_by_name = {
-            track.name: track for track in new_timeline.tracks
-        }
+        self.tracks_by_name = {track.name: track for track in new_timeline.tracks}
         self.handled_timeline_init = False
         self.current_timeline_start_offset = None
 
@@ -287,6 +276,8 @@ class EDLReader:
         event_statements = []
         current_event = None
         for statement in statements:
+            should_start_new_event = False
+
             # Handle top-level NoteFormStatements
             if isinstance(statement, NoteFormStatement):
                 statement_identifier = statement.statement_identifier
@@ -295,18 +286,38 @@ class EDLReader:
                     # We ignore this for now on the assumption that the timecodes
                     # use either ; or : to denote drop/non-drop
                     continue
-                elif statement_identifier is NoteFormStatement.NoteFormIdentifiers.TITLE:
+                elif (
+                    statement_identifier is NoteFormStatement.NoteFormIdentifiers.TITLE
+                ):
                     # If the current timeline already has a name, that means we
                     # encountered a second TITLE directive an it's the start of
                     # a new title
-                    if self.current_timeline.name and self.current_timeline.name != statement.data:
+                    if (
+                        self.current_timeline.name
+                        and self.current_timeline.name != statement.data
+                    ):
                         self.current_timeline = otio.schema.Timeline()
                     self.current_timeline.name = statement.data
                     continue
+                elif (
+                    statement_identifier is NoteFormStatement.NoteFormIdentifiers.SPLIT
+                ):
+                    # SPLIT notes appy to the following event
+                    # TODO: How do we make the edit number on this statement not win?
+                    # Perhaps the loop keeps a None Edit number until it hits an explicit one?
+                    should_start_new_event = True
 
             # accumulate statements in the same event
-            if statement.normalized_edit_number == current_event:
+            edit_number_changed = (
+                current_event is not None
+                and not statement.is_edit_number_inferred
+                and statement.normalized_edit_number != current_event
+            )
+            should_start_new_event = should_start_new_event or edit_number_changed
+            if not should_start_new_event:
                 event_statements.append(statement)
+                if current_event is None and not statement.is_edit_number_inferred:
+                    current_event = statement.normalized_edit_number
                 continue
 
             # We're starting a new event, process the current statements
@@ -314,7 +325,11 @@ class EDLReader:
                 self.process_event_statements(event_statements)
 
             event_statements = []
-            current_event = statement.normalized_edit_number
+            current_event = (
+                statement.normalized_edit_number
+                if not statement.is_edit_number_inferred
+                else None
+            )
             event_statements.append(statement)
 
         # handle unprocessed statements when we get to EOF
@@ -333,10 +348,10 @@ class EDLReader:
         return self._edl_rate
 
     def make_clip(
-            self,
-            statement: StandardFormStatement,
-            event_comments: EventComments,
-            is_from_clip: bool,
+        self,
+        statement: StandardFormStatement,
+        event_comments: EventComments,
+        is_from_clip: bool,
     ) -> otio.schema.Clip:
         """
         Generates a best-effort clip for the standard identifier. Depending on
@@ -353,17 +368,22 @@ class EDLReader:
             media_reference=media_ref,
         )
         cmx_metadata = {}
-        clip_metadata = {
-            METADATA_NAMESPACE: cmx_metadata
-        }
+        clip_metadata = {METADATA_NAMESPACE: cmx_metadata}
 
         # Copy metadata
         if is_from_clip:
             clip_name_key = "clip_name"
             # Copy all the metadata except the TO clip info
-            if "asc_sop" in event_comments.handled or "asc_sat" in event_comments.handled:
-                sop = event_comments.handled.get("asc_sop", EventComments.DEFAULT_ASC_SOP)
-                sat = event_comments.handled.get("asc_sat", EventComments.DEFAULT_ASC_SAT)
+            if (
+                "asc_sop" in event_comments.handled
+                or "asc_sat" in event_comments.handled
+            ):
+                sop = event_comments.handled.get(
+                    "asc_sop", EventComments.DEFAULT_ASC_SOP
+                )
+                sat = event_comments.handled.get(
+                    "asc_sat", EventComments.DEFAULT_ASC_SAT
+                )
 
                 clip_metadata["cdl"] = dict(asc_sat=sat, asc_sop=sop)
 
@@ -378,9 +398,7 @@ class EDLReader:
 
         # get the clip name
         comment_clip_name = event_comments.handled.get(clip_name_key)
-        clip.name = self.name_for_clip(
-            clip, comment_clip_name, statement.edit_number
-        )
+        clip.name = self.name_for_clip(clip, comment_clip_name, statement.edit_number)
         if comment_clip_name:
             # Stash the canonical clip name so downstream consumers can tell
             # if the otio clip.name was inferred
@@ -403,24 +421,24 @@ class EDLReader:
         return clip
 
     def name_for_clip(
-            self, clip: otio.schema.Clip,
-            comment_clip_name: Optional[str],
-            edit_number: str,
+        self,
+        clip: otio.schema.Clip,
+        comment_clip_name: Optional[str],
+        edit_number: str,
     ) -> str:
-
         # If an explicit FROM or TO CLIP NAME was provided in comments, use it
         if comment_clip_name:
             return comment_clip_name
         elif (
-                clip.media_reference and
-                hasattr(clip.media_reference, 'target_url') and
-                clip.media_reference.target_url is not None
+            clip.media_reference
+            and hasattr(clip.media_reference, "target_url")
+            and clip.media_reference.target_url is not None
         ):
             return Path(clip.media_reference.target_url).stem
         elif (
-                clip.media_reference and
-                hasattr(clip.media_reference, 'target_url_base') and
-                clip.media_reference.target_url_base is not None
+            clip.media_reference
+            and hasattr(clip.media_reference, "target_url_base")
+            and clip.media_reference.target_url_base is not None
         ):
             return Path(_get_image_sequence_url(clip)).stem
 
@@ -428,7 +446,7 @@ class EDLReader:
         return edit_number
 
     def media_reference_for_statement(
-            self, statement: StandardFormStatement, comment_ref_data: Optional[str]
+        self, statement: StandardFormStatement, comment_ref_data: Optional[str]
     ) -> otio.core.MediaReference:
         media_reference = otio.schema.MissingReference()
         special_source = statement.special_source
@@ -440,20 +458,16 @@ class EDLReader:
         elif special_source is SpecialSource.BARS:
             media_reference = otio.schema.GeneratorReference(
                 # TODO: Replace with enum, once one exists
-                generator_kind='SMPTEBars'
+                generator_kind="SMPTEBars"
             )
         elif comment_ref_data is not None:
-            image_sequence_match = self.IMAGE_SEQUENCE_PATTERN.search(
-                comment_ref_data
-            )
+            image_sequence_match = self.IMAGE_SEQUENCE_PATTERN.search(comment_ref_data)
             if image_sequence_match is not None:
                 path, basename = os.path.split(comment_ref_data)
-                prefix, suffix = basename.split(
-                    image_sequence_match.group("range")
-                )
+                prefix, suffix = basename.split(image_sequence_match.group("range"))
                 start_frame = int(image_sequence_match.group("start"))
                 end_frame = int(image_sequence_match.group("end"))
-                duration_frames = (end_frame - start_frame + 1)
+                duration_frames = end_frame - start_frame + 1
                 media_reference = otio.schema.ImageSequenceReference(
                     target_url_base=path,
                     name_prefix=prefix,
@@ -465,12 +479,10 @@ class EDLReader:
                         start_time=from_timecode_approx(
                             statement.source_entry,
                             self.edit_rate,
-                            self.ignore_invalid_timecode_errors
+                            self.ignore_invalid_timecode_errors,
                         ),
-                        duration=opentime.from_frames(
-                            duration_frames, self.edit_rate
-                        ),
-                    )
+                        duration=opentime.from_frames(duration_frames, self.edit_rate),
+                    ),
                 )
             else:
                 media_reference = otio.schema.ExternalReference(
@@ -480,7 +492,7 @@ class EDLReader:
         return media_reference
 
     def make_transition(
-            self, statement: StandardFormStatement
+        self, statement: StandardFormStatement
     ) -> otio.schema.Transition:
         # TODO: PORT THIS TO STATEMENT-BASED
         effect = statement.effect
@@ -505,34 +517,34 @@ class EDLReader:
             # only supported type at the moment
             transition_type=otio_transition_type,
             metadata={
-                'cmx_3600': {
-                    'transition': statement.edit_type,
-                    'transition_duration': transition_duration.value,
+                "cmx_3600": {
+                    "transition": statement.edit_type,
+                    "transition_duration": transition_duration.value,
                     "events": [statement.edit_number],
                 },
             },
         )
-        new_trx.in_offset = opentime.RationalTime(
-            0, transition_duration.rate
-        )
+        new_trx.in_offset = opentime.RationalTime(0, transition_duration.rate)
         new_trx.out_offset = transition_duration
         return new_trx
 
-    def apply_timing_effect(
-            self, statement: NoteFormStatement, clip: otio.schema.Clip
-    ):
-        if statement.statement_identifier is NoteFormStatement.NoteFormIdentifiers.FREEZE_FRAME:
+    def apply_timing_effect(self, statement: NoteFormStatement, clip: otio.schema.Clip):
+        if (
+            statement.statement_identifier
+            is NoteFormStatement.NoteFormIdentifiers.FREEZE_FRAME
+        ):
             # XXX remove 'FF' suffix (writing edl will add it back)
-            if clip.name.endswith(' FF'):
+            if clip.name.endswith(" FF"):
                 clip.name = clip.name[:-3]
-        elif statement.statement_identifier is NoteFormStatement.NoteFormIdentifiers.MOTION_MEMORY:
+        elif (
+            statement.statement_identifier
+            is NoteFormStatement.NoteFormIdentifiers.MOTION_MEMORY
+        ):
             time_scalar = statement.motion_directive.speed / self.edit_rate
             if time_scalar == 0.0:
                 clip.effects.append(otio.schema.FreezeFrame())
             else:
-                clip.effects.append(
-                    otio.schema.LinearTimeWarp(time_scalar=time_scalar)
-                )
+                clip.effects.append(otio.schema.LinearTimeWarp(time_scalar=time_scalar))
         else:
             raise ValueError(
                 f"Cannot apply statement as a motion statement: {statement}"
@@ -548,58 +560,56 @@ class EDLReader:
 
         # Handle statements not associated with an event
         # (this should be very rare)
-        edit_number = statements[0].edit_number
-        if edit_number is None:
-            # Make all statements into comments
+        explicit_edit_number_present = any(
+            True
+            for statement in statements
+            if not statement.is_edit_number_inferred and statement.edit_number
+        )
+        if not explicit_edit_number_present:
+            # Make all statements into timeline comments
             cmx_metadata = self.current_timeline.metadata.setdefault(
                 METADATA_NAMESPACE, {}
             )
             cmx_metadata.setdefault("comments", []).extend(
-                statement.statement_text for statement in statements
+                statement.statement_text
+                for statement in statements
+                if hasattr(statement, "statement_text")
             )
             return
 
         # Separate the statements by type and apply processing
-        comments = EventComments(
-            (
-                statement for statement in statements
-                if isinstance(statement, NoteFormStatement) and
-                   not statement.statement_identifier == NoteFormStatement.NoteFormIdentifiers.MOTION_MEMORY
-            ),
-            self.edit_rate,
+        non_motion_notes = (
+            statement
+            for statement in statements
+            if isinstance(statement, NoteFormStatement)
+            and not statement.statement_identifier
+            == NoteFormStatement.NoteFormIdentifiers.MOTION_MEMORY
         )
+        comments = EventComments(non_motion_notes, self.edit_rate)
 
         standard_form_statements: list[StandardFormStatement] = [
-            statement for statement in statements
+            statement
+            for statement in statements
             if isinstance(statement, StandardFormStatement)
         ]
+        has_transition = any(
+            True
+            for statement in standard_form_statements
+            if statement.edit_type != EffectType.CUT.value
+        )
 
         # Process the edit
-        edit_items_by_channels: dict[str, list[Union[otio.schema.Clip, otio.schema.Transition]]] = {}
+        edit_items_by_channels: dict[
+            str, list[Union[otio.schema.Clip, otio.schema.Transition]]
+        ] = {}
         for source_idx, statement in enumerate(standard_form_statements):
-            """
-            What I'm thinking:
-                Assumptions:
-                - Dissolves and wipes will only have two standard form statements
-                - Statements happen in chronological order
-                
-                When the event is resolved:
-                - determine the "bounding box" for the whole set of items on the timeline
-                - iterate through tracks until either one is unoccupied for the range or we run out
-                - use the first track with free space -or-
-                - create a new track if there were none with free space
-                - If placed on an existing track, and there was a transition, check
-                    the preceding clip's src TC end value to see if it matches the next
-                     one's start TC value, if it does extend the preceding duration by the first
-                     clip's duration and delete the first clip
-                
-                When timecode conversions go wrong:
-                - Timecodes are floored to seconds if start, or for end floored to seconds or start - whichever is highest
-                - If the identifier is second in the event and it's a transition, make sure the duration
-                    is at least the transition duration and the start is the end of the previous clip
-            """
+            # The "from" clip is any clip that is the first source in a
+            # transition
+            # If there is no transition then audio and video can have multiple
+            # statements, treat audio and video as "FROM" clips
+            is_from_clip = not has_transition or source_idx == 0
+
             # Make the clip for the statement
-            is_from_clip = (source_idx == 0)
             clip = self.make_clip(statement, comments, is_from_clip)
 
             # if the statement includes a transition, make that transition and
@@ -608,13 +618,13 @@ class EDLReader:
                 transition = self.make_transition(statement)
 
                 # Give the transition a more context-aware name if we can
-                transition_name = f'{transition.transition_type} to {clip.name}'
-                if 'dest_clip_name' in comments.handled:
-                    if 'clip_name' in comments.handled:
-                        transition_name = '{} from {} to {}'.format(
+                transition_name = f"{transition.transition_type} to {clip.name}"
+                if "dest_clip_name" in comments.handled:
+                    if "clip_name" in comments.handled:
+                        transition_name = "{} from {} to {}".format(
                             transition.transition_type,
-                            comments.handled['clip_name'],
-                            comments.handled['dest_clip_name'],
+                            comments.handled["clip_name"],
+                            comments.handled["dest_clip_name"],
                         )
 
                 transition.name = transition_name
@@ -622,18 +632,20 @@ class EDLReader:
                     transition
                 )
 
-            edit_items_by_channels.setdefault(statement.channels, []).append(
-                clip
-            )
+            edit_items_by_channels.setdefault(statement.channels, []).append(clip)
 
             # Handle any timeline level stuff - e.g. the global start time is
             # the record in timecode of the first event.
             if not self.handled_timeline_init:
-                tl_cmx_metadata = self.current_timeline.metadata.setdefault(METADATA_NAMESPACE, {})
+                tl_cmx_metadata = self.current_timeline.metadata.setdefault(
+                    METADATA_NAMESPACE, {}
+                )
                 tl_cmx_metadata["edl_rate"] = self.edit_rate
                 try:
                     self.current_timeline.global_start_time = from_timecode_approx(
-                        statement.sync_entry, self.edit_rate, self.ignore_invalid_timecode_errors
+                        statement.sync_entry,
+                        self.edit_rate,
+                        self.ignore_invalid_timecode_errors,
                     )
                 except ValueError:
                     tl_cmx_metadata.setdefault("parsing_info", []).append(
@@ -646,16 +658,16 @@ class EDLReader:
             NoteFormStatement.NoteFormIdentifiers.FREEZE_FRAME,
         ]
         motion_statements = [
-            statement for statement in statements
-            if isinstance(statement, NoteFormStatement) and
-               statement.statement_identifier in motion_statement_identifiers
-
+            statement
+            for statement in statements
+            if isinstance(statement, NoteFormStatement)
+            and statement.statement_identifier in motion_statement_identifiers
         ]
 
         for motion_statement in motion_statements:
             event_clips = [
-                item for item in
-                itertools.chain.from_iterable(
+                item
+                for item in itertools.chain.from_iterable(
                     edit_items for edit_items in edit_items_by_channels.values()
                 )
                 if isinstance(item, otio.schema.Clip)
@@ -663,7 +675,10 @@ class EDLReader:
             effected_clip = event_clips[0]
             # Freeze frame statements provide no additional context so they simply
             # apply to the first available clip
-            if motion_statement.statement_identifier is NoteFormStatement.NoteFormIdentifiers.FREEZE_FRAME:
+            if (
+                motion_statement.statement_identifier
+                is NoteFormStatement.NoteFormIdentifiers.FREEZE_FRAME
+            ):
                 self.apply_timing_effect(motion_statement, effected_clip)
                 continue
 
@@ -671,8 +686,10 @@ class EDLReader:
             motion_directive = motion_statement.motion_directive
             try:
                 effected_clip = next(
-                    clip for clip in event_clips
-                    if clip.metadata[METADATA_NAMESPACE]["reel"] == motion_directive.reel
+                    clip
+                    for clip in event_clips
+                    if clip.metadata[METADATA_NAMESPACE]["reel"]
+                    == motion_directive.reel
                 )
             except StopIteration:
                 # no exact match, just apply to the first clip
@@ -697,8 +714,7 @@ class EDLReader:
                 track = self.tracks_by_name[track_name]
             except KeyError:
                 track = otio.schema.Track(
-                    name=track_name,
-                    kind=_guess_kind_for_track_name(track_name)
+                    name=track_name, kind=_guess_kind_for_track_name(track_name)
                 )
                 self.add_track(track)
 
@@ -708,7 +724,10 @@ class EDLReader:
         return out_tracks
 
     def place_items_in_timeline(
-            self, items: list[otio.core.Item], timeline_range: opentime.TimeRange, channels: str
+        self,
+        items: list[otio.core.Item],
+        timeline_range: opentime.TimeRange,
+        channels: str,
     ):
         # Find the candidate track
         candidate_tracks: list[otio.schema.Track] = self.tracks_for_channel(channels)
@@ -717,12 +736,16 @@ class EDLReader:
 
         for destination_track in candidate_tracks:
             # Make sure the gap properly offsets items in the track
-            relative_start_time = timeline_range.start_time - self.current_timeline_start_offset
+            relative_start_time = (
+                timeline_range.start_time - self.current_timeline_start_offset
+            )
             if relative_start_time > destination_track.duration():
                 destination_track.append(
                     otio.schema.Gap(
                         source_range=opentime.TimeRange(
-                            start_time=opentime.RationalTime(0, relative_start_time.rate),
+                            start_time=opentime.RationalTime(
+                                0, relative_start_time.rate
+                            ),
                             duration=relative_start_time - destination_track.duration(),
                         )
                     )
@@ -738,7 +761,9 @@ class EDLReader:
                         events = sorted(
                             set(
                                 itertools.chain.from_iterable(
-                                    item.metadata.get(METADATA_NAMESPACE, {}).get("events")
+                                    item.metadata.get(METADATA_NAMESPACE, {}).get(
+                                        "events"
+                                    )
                                     for item in items
                                 )
                             )
@@ -760,12 +785,16 @@ class EDLReader:
                         duration=existing_clip.duration() + added_time,
                     )
                     appending_cmx_metadata = appending_clip.metadata[METADATA_NAMESPACE]
-                    existing_events = existing_clip.metadata[METADATA_NAMESPACE].get("events", [])
+                    existing_events = existing_clip.metadata[METADATA_NAMESPACE].get(
+                        "events", []
+                    )
                     for event_number in appending_cmx_metadata.get("events", []):
                         if event_number not in existing_events:
                             existing_events.append(event_number)
 
-                    existing_clip.metadata[METADATA_NAMESPACE]["events"] = existing_events
+                    existing_clip.metadata[METADATA_NAMESPACE][
+                        "events"
+                    ] = existing_events
                     items = items[1:]
 
             if len(candidate_tracks) > 1:
@@ -774,7 +803,7 @@ class EDLReader:
                 destination_track.extend(items)
 
     def resolve_timings_for_event_items(
-            self, items: list[Union[otio.schema.Clip, otio.schema.Transition]]
+        self, items: list[Union[otio.schema.Clip, otio.schema.Transition]]
     ) -> opentime.TimeRange:
         """
         Resolves the timings for the group of items in an event.
@@ -796,7 +825,9 @@ class EDLReader:
         previous_range_is_implicit = False
         clips = [item for item in items if isinstance(item, otio.schema.Clip)]
         for clip in clips:
-            clip_timecode_metadata = clip.metadata[METADATA_NAMESPACE]["original_timecode"]
+            clip_timecode_metadata = clip.metadata[METADATA_NAMESPACE][
+                "original_timecode"
+            ]
             record_tc_in = clip_timecode_metadata["record_tc_in"]
             record_tc_out = clip_timecode_metadata["record_tc_out"]
 
@@ -826,7 +857,9 @@ class EDLReader:
 
         # Now resolve the source ranges in terms of the timeline ranges
         for record_range, clip in zip(clip_record_ranges, clips):
-            clip_timecode_metadata = clip.metadata[METADATA_NAMESPACE]["original_timecode"]
+            clip_timecode_metadata = clip.metadata[METADATA_NAMESPACE][
+                "original_timecode"
+            ]
             src_tc_in = clip_timecode_metadata["source_tc_in"]
             src_tc_out = clip_timecode_metadata["source_tc_out"]
 
@@ -836,9 +869,7 @@ class EDLReader:
             src_end_time = from_timecode_approx(
                 src_tc_out, self.edit_rate, self.ignore_invalid_timecode_errors
             )
-            src_range = opentime.range_from_start_end_time(
-                src_start_time, src_end_time
-            )
+            src_range = opentime.range_from_start_end_time(src_start_time, src_end_time)
 
             # Determine what the source duration should be back-calculated from
             # the timeline duration
@@ -863,26 +894,29 @@ class EDLReader:
             duration_is_implicit = record_tc_in == record_tc_out
             durations_match = record_range.duration == src_range.duration
             if not durations_match and not duration_is_implicit:
-                clip_has_timing_effect = len(
-                    [
-                        effect for effect in clip.effects
-                        if isinstance(effect, otio.schema.TimeEffect)
-                    ]
-                ) >= 1
+                clip_has_timing_effect = (
+                    len(
+                        [
+                            effect
+                            for effect in clip.effects
+                            if isinstance(effect, otio.schema.TimeEffect)
+                        ]
+                    )
+                    >= 1
+                )
                 if not clip_has_timing_effect:
                     raise EDLParseError(
                         "Source and record duration don't match: {} != {}"
                         " for clip {}".format(
-                            src_range.duration,
-                            record_range.duration,
-                            clip.name
+                            src_range.duration, record_range.duration, clip.name
                         )
                     )
 
-                '''
+                """
                 # Sometimes the math doesn't work out for various rounding and
                 # M2 precision issues. The fix below would favor the speed
                 # change described by the timecodes rather than the M2 effect
+                # This would be a debatable change
                 else:
                     # Calculate an effective time scalar to use for the warp
                     # based on the timings in the EDL
@@ -898,19 +932,19 @@ class EDLReader:
                             record_range.duration.to_seconds()
                         )
                         time_warp.time_scalar = calculated_time_scalar
-                '''
+                """
 
         return opentime.TimeRange(
             start_time=clip_record_ranges[0].start_time,
             duration=sum(
                 (r.duration for r in clip_record_ranges),
                 opentime.RationalTime(0, self.edit_rate),
-            )
+            ),
         )
 
 
 def from_timecode_approx(
-        timecode: str, rate: float, ignore_invalid_timecode_errors=False
+    timecode: str, rate: float, ignore_invalid_timecode_errors=False
 ):
     """
     Generates a time for the provided timecode according to the
@@ -951,25 +985,19 @@ def from_timecode_approx(
     except ValueError:
         raise timecode_exception
 
+
 def _get_image_sequence_url(clip):
     ref = clip.media_reference
-    start_frame, end_frame = ref.frame_range_for_time_range(
-        clip.trimmed_range()
-    )
+    start_frame, end_frame = ref.frame_range_for_time_range(clip.trimmed_range())
 
-    frame_range_str = '[{start}-{end}]'.format(
-        start=start_frame,
-        end=end_frame
-    )
+    frame_range_str = "[{start}-{end}]".format(start=start_frame, end=end_frame)
 
     url = clip.media_reference.abstract_target_url(frame_range_str)
 
     return url
 
 
-def _clips_are_continuous(
-        clip_1: otio.schema.Clip, clip_2: otio.schema.Clip
-) -> bool:
+def _clips_are_continuous(clip_1: otio.schema.Clip, clip_2: otio.schema.Clip) -> bool:
     """
     Assuming clip_2 immediately follows clip_1 in a track, checks to see if
     clip_2 is continuous in the source from clip_1.
@@ -999,7 +1027,8 @@ def _clips_are_continuous(
     clip_1_time_scalar = functools.reduce(
         lambda x, y: (x * y.time_scalar),
         (
-            effect for effect in clip_1.effects
+            effect
+            for effect in clip_1.effects
             if isinstance(effect, otio.schema.LinearTimeWarp)
         ),
         1,
@@ -1007,7 +1036,8 @@ def _clips_are_continuous(
     clip_2_time_scalar = functools.reduce(
         lambda x, y: (x * y.time_scalar),
         (
-            effect for effect in clip_2.effects
+            effect
+            for effect in clip_2.effects
             if isinstance(effect, otio.schema.LinearTimeWarp)
         ),
         1,
@@ -1042,7 +1072,6 @@ def _should_merge_clip_to_track(
     if clip.duration().value == 0:
         return _clips_are_continuous(existing_item, clip)
 
-
     if len(track) < 2:
         return False
 
@@ -1050,8 +1079,6 @@ def _should_merge_clip_to_track(
     if not isinstance(item_before_existing, otio.schema.Transition):
         return False
 
-    clip_is_all_transition = (
-        item_before_existing.out_offset == existing_item.duration()
-    )
+    clip_is_all_transition = item_before_existing.out_offset == existing_item.duration()
 
     return _clips_are_continuous(existing_item, clip)
