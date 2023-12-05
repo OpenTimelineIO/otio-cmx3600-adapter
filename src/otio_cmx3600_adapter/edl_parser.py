@@ -99,6 +99,9 @@ def statements_from_lines(edl_lines: Iterable[str]) -> Iterator[EDLStatement]:
         )
         comment_match = COMMENT_RE.match(consuming_line)
         if not did_have_edit_number or comment_match is not None:
+            # Skip empty comments
+            if comment_match and not comment_match.group("data"):
+                continue
             yield _note_form_statement_from_line(
                 consuming_line, **element_context
             )

@@ -257,7 +257,8 @@ class NoteFormStatement(EDLStatement):
         if ":" in self.statement_text:
             return self.statement_text.split(":", 1)[0]
 
-        return self.statement_text.split(maxsplit=1)[-1]
+        parts = self.statement_text.split(maxsplit=1)
+        return parts[-1] if parts else ""
 
     @property
     def data(self) -> Optional[str]:
