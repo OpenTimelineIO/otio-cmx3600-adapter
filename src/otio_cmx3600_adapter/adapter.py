@@ -4,6 +4,7 @@ from otio_cmx3600_adapter import (
 from otio_cmx3600_adapter.exceptions import EDLParseError
 
 
+read_from_file = cmx_3600_reader.read_from_file
 read_from_string = cmx_3600_reader.read_from_string
 write_to_string = cmx_3600_writer.write_to_string
 

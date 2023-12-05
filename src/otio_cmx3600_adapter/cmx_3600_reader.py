@@ -49,6 +49,25 @@ CHANNEL_MAP = {
 }
 
 
+def read_from_file(
+    filepath,
+    rate=24,
+    ignore_timecode_mismatch=False,
+    ignore_invalid_timecode_errors=False,
+):
+    try:
+        with open(filepath) as fo:
+            contents = fo.read()
+    except UnicodeDecodeError:
+        # attempt ISO-8859-1, this sometimes works better than UTF-8
+        with open(filepath, encoding="iso-8859-1") as fo:
+            contents = fo.read()
+
+    return read_from_string(
+        contents, rate, ignore_timecode_mismatch, ignore_invalid_timecode_errors
+    )
+
+
 def read_from_string(
     input_str,
     rate=24,
