@@ -33,6 +33,7 @@ from .edl_statement import (
 
 
 METADATA_NAMESPACE = "cmx_3600"
+TIMECODE_WAS_ADJUSTED_KEY = "timecode_was_adjusted"
 
 
 # CMX_3600 supports some shorthand for channel assignments
@@ -200,8 +201,12 @@ class EventComments:
             return None
 
         marker = otio.schema.Marker()
+        marker_timecode = m.group(1)
+        marker_time, time_was_adjusted = from_timecode_approx(
+            marker_timecode, self.edl_rate, True
+        )
         marker.marked_range = otio.opentime.TimeRange(
-            start_time=from_timecode_approx(m.group(1), self.edl_rate, True),
+            start_time=marker_time,
             duration=opentime.RationalTime(),
         )
 
@@ -209,7 +214,14 @@ class EventComments:
         # is not a valid enum somehow.
         color_parsed_from_file = m.group(2)
 
-        marker.metadata.update({METADATA_NAMESPACE: {"color": color_parsed_from_file}})
+        cmx_metadata = {
+            "color": color_parsed_from_file,
+            "timecode": marker_timecode,
+        }
+        if time_was_adjusted:
+            cmx_metadata[TIMECODE_WAS_ADJUSTED_KEY] = True
+
+        marker.metadata[METADATA_NAMESPACE] = cmx_metadata
 
         # @TODO: if it is a valid
         if hasattr(otio.schema.MarkerColor, color_parsed_from_file.upper()):
@@ -468,6 +480,11 @@ class EDLReader:
                 start_frame = int(image_sequence_match.group("start"))
                 end_frame = int(image_sequence_match.group("end"))
                 duration_frames = end_frame - start_frame + 1
+                start_time, _ = from_timecode_approx(
+                    statement.source_entry,
+                    self.edit_rate,
+                    self.ignore_invalid_timecode_errors,
+                )
                 media_reference = otio.schema.ImageSequenceReference(
                     target_url_base=path,
                     name_prefix=prefix,
@@ -476,11 +493,7 @@ class EDLReader:
                     start_frame=start_frame,
                     frame_zero_padding=len(image_sequence_match.group("start")),
                     available_range=otio.opentime.TimeRange(
-                        start_time=from_timecode_approx(
-                            statement.source_entry,
-                            self.edit_rate,
-                            self.ignore_invalid_timecode_errors,
-                        ),
+                        start_time=start_time,
                         duration=opentime.from_frames(duration_frames, self.edit_rate),
                     ),
                 )
@@ -502,11 +515,16 @@ class EDLReader:
             otio_transition_type = otio.schema.TransitionTypes.SMPTE_Dissolve
         else:
             raise EDLParseError(
-                "Transition type '{}' not supported by the CMX EDL reader "
-                "currently.".format(effect.type)
+                f"Transition type '{effect.type}' on line {statement.line_number}"
+                " not supported by the CMX EDL reader currently."
             )
         # TODO: support delayed transition like described here:
         # https://xmil.biz/EDL-X/CMX3600.pdf
+        if effect.transition_duration is None:
+            raise EDLParseError(
+                f"Transition type '{effect.type}' on line {statement.line_number}"
+                "is missing a duration."
+            )
         transition_duration = opentime.RationalTime(
             effect.transition_duration,
             self.edit_rate,
@@ -642,11 +660,13 @@ class EDLReader:
                 )
                 tl_cmx_metadata["edl_rate"] = self.edit_rate
                 try:
-                    self.current_timeline.global_start_time = from_timecode_approx(
+                    self.current_timeline.global_start_time, was_adjusted = from_timecode_approx(
                         statement.sync_entry,
                         self.edit_rate,
                         self.ignore_invalid_timecode_errors,
                     )
+                    if was_adjusted:
+                        tl_cmx_metadata[TIMECODE_WAS_ADJUSTED_KEY] = True
                 except ValueError:
                     tl_cmx_metadata.setdefault("parsing_info", []).append(
                         f"EDL start timecode {statement.sync_entry} couldn't be parsed"
@@ -688,7 +708,7 @@ class EDLReader:
                 effected_clip = next(
                     clip
                     for clip in event_clips
-                    if clip.metadata[METADATA_NAMESPACE]["reel"]
+                    if clip.metadata[METADATA_NAMESPACE].get("reel")
                     == motion_directive.reel
                 )
             except StopIteration:
@@ -730,11 +750,11 @@ class EDLReader:
         channels: str,
     ):
         # Find the candidate track
-        candidate_tracks: list[otio.schema.Track] = self.tracks_for_channel(channels)
+        target_tracks: list[otio.schema.Track] = self.tracks_for_channel(channels)
         if self.current_timeline_start_offset is None:
             self.current_timeline_start_offset = timeline_range.start_time
 
-        for destination_track in candidate_tracks:
+        for destination_track in target_tracks:
             # Make sure the gap properly offsets items in the track
             relative_start_time = (
                 timeline_range.start_time - self.current_timeline_start_offset
@@ -797,7 +817,7 @@ class EDLReader:
                     ] = existing_events
                     items = items[1:]
 
-            if len(candidate_tracks) > 1:
+            if len(target_tracks) > 1:
                 destination_track.extend(copy.deepcopy(items))
             else:
                 destination_track.extend(items)
@@ -831,15 +851,19 @@ class EDLReader:
             record_tc_in = clip_timecode_metadata["record_tc_in"]
             record_tc_out = clip_timecode_metadata["record_tc_out"]
 
-            record_start_time = from_timecode_approx(
+            record_start_time, rec_start_adjusted = from_timecode_approx(
                 record_tc_in, self.edit_rate, self.ignore_invalid_timecode_errors
             )
-            record_end_time = from_timecode_approx(
+            record_end_time, rec_end_adjusted = from_timecode_approx(
                 record_tc_out, self.edit_rate, self.ignore_invalid_timecode_errors
             )
             record_range = opentime.range_from_start_end_time(
                 record_start_time, record_end_time
             )
+            if rec_start_adjusted:
+                clip.metadata[METADATA_NAMESPACE][f"record_start_{TIMECODE_WAS_ADJUSTED_KEY}"] = True
+            if rec_end_adjusted:
+                clip.metadata[METADATA_NAMESPACE][f"record_end_{TIMECODE_WAS_ADJUSTED_KEY}"] = True
 
             # If the previous range is implicit, extend it based on context
             if previous_range_is_implicit:
@@ -863,13 +887,17 @@ class EDLReader:
             src_tc_in = clip_timecode_metadata["source_tc_in"]
             src_tc_out = clip_timecode_metadata["source_tc_out"]
 
-            src_start_time = from_timecode_approx(
+            src_start_time, src_start_adjusted = from_timecode_approx(
                 src_tc_in, self.edit_rate, self.ignore_invalid_timecode_errors
             )
-            src_end_time = from_timecode_approx(
+            src_end_time , src_end_adjusted = from_timecode_approx(
                 src_tc_out, self.edit_rate, self.ignore_invalid_timecode_errors
             )
             src_range = opentime.range_from_start_end_time(src_start_time, src_end_time)
+            if src_start_adjusted:
+                clip.metadata[METADATA_NAMESPACE][f"source_start_{TIMECODE_WAS_ADJUSTED_KEY}"] = True
+            if src_end_adjusted:
+                clip.metadata[METADATA_NAMESPACE][f"source_end_{TIMECODE_WAS_ADJUSTED_KEY}"] = True
 
             # Determine what the source duration should be back-calculated from
             # the timeline duration
@@ -945,13 +973,16 @@ class EDLReader:
 
 def from_timecode_approx(
     timecode: str, rate: float, ignore_invalid_timecode_errors=False
-):
+) -> tuple[opentime.RationalTime, bool]:
     """
     Generates a time for the provided timecode according to the
     ignore_invalid_timecode_errors policy.
+
     If ignore_invalid_timecode_errors is True, invalid timecode will be
     interpreted at the rate of 1 + the frame count. This should get the
     value pretty close in a lot of cases - within the second at least.
+
+    :returns: a tuple of (time, did_adjust_to_rate)
     """
     # Handle EDLs with frame numbers instead of TC
     if ":" not in timecode and ";" not in timecode:
@@ -962,7 +993,7 @@ def from_timecode_approx(
 
     timecode_exception = None
     try:
-        return opentime.from_timecode(timecode, rate=rate)
+        return opentime.from_timecode(timecode, rate=rate), False
     except ValueError as e:
         if ignore_invalid_timecode_errors:
             timecode_exception = e
@@ -980,8 +1011,17 @@ def from_timecode_approx(
         raise timecode_exception
 
     tc_frame_count = tc_parts[-1]
+    # Infer a rate from known rates
+    # This list is derived from:
+    # https://github.com/AcademySoftwareFoundation/OpenTimelineIO/blob/17e92975080b32a26c6c3ded2b5750b31b9910a2/src/opentime/rationalTime.cpp#L41-L58
+    known_rates = [1, 12, 24, 25, 30, 48, 50, 60]
+    inferred_rate = tc_frame_count + 1
+    for rate in known_rates:
+        if rate > tc_frame_count:
+            inferred_rate = rate
+            break
     try:
-        return opentime.from_timecode(timecode, rate=tc_frame_count + 1)
+        return opentime.from_timecode(timecode, rate=inferred_rate), True
     except ValueError:
         raise timecode_exception
 
