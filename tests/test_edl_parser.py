@@ -1,3 +1,4 @@
+import decimal
 from pathlib import Path
 
 import pytest
@@ -116,6 +117,32 @@ M2   Z682_156       000.0                01:00:10:21
     assert statement_2.statement_identifier == edl_statement.NoteFormStatement.NoteFormIdentifiers.MOTION_MEMORY
     assert statement_3.statement_identifier == edl_statement.NoteFormStatement.NoteFormIdentifiers.FROM_CLIP_NAME
     assert statement_4.statement_identifier == edl_statement.NoteFormStatement.NoteFormIdentifiers.FREEZE_FRAME
+
+
+@pytest.mark.parametrize(
+    "directive,expected_reel,expected_speed,expected_trigger",
+    [
+        (
+                "D001C003_210414A7                         048.0 19:37:19:18",
+                "D001C003_210414A7",
+                decimal.Decimal("48.0"),
+                "19:37:19:18"
+        ),
+        (
+                "CYAN           000.0    MSTR     I +00:00:00:15",
+                "CYAN",
+                decimal.Decimal("0.0"),
+                "00:00:00:15"
+        ),
+    ]
+)
+def test_m2_processing(
+        directive, expected_reel, expected_speed, expected_trigger
+):
+    motion_directive = edl_statement.MotionDirective.from_string(directive)
+    assert motion_directive.reel == expected_reel
+    assert motion_directive.speed == expected_speed
+    assert motion_directive.trigger == expected_trigger
 
 
 @pytest.mark.parametrize(

@@ -6,8 +6,7 @@ In addition to those specifications, this parser also uses techniques based on
 empirical data from EDLs in the wild for a more pragmatic approach targeting the
 varied dialects of EDL in modern usage.
 """
-
-import functools
+import decimal
 import re
 from dataclasses import dataclass
 from decimal import Decimal
@@ -113,24 +112,20 @@ class MotionDirective:
     speed: Decimal
     trigger: str
 
-    # regex for parsing the playback speed of an M2 event
-    SPEED_EFFECT_RE = re.compile(
-        r"(?P<reel>.*?)\s*(?P<speed>-?[0-9\.]*)\s*(?P<trigger>[0-9:]{11})$"
-    )
-
     @classmethod
     def from_string(cls, motion_directive: str):
-        match = cls.SPEED_EFFECT_RE.match(motion_directive)
-        if match is None:
+        parts = motion_directive.split()
+        reel = parts.pop(0)
+        speed = parts.pop(0)
+        trigger = parts.pop().strip("+").strip("-")
+        try:
+            speed_dec = Decimal(speed)
+        except decimal.InvalidOperation:
             raise EDLParseError(
                 f"Unsupported M2 Effect format: '{motion_directive}'"
             )
 
-        return cls(
-            reel=match.group("reel"),
-            speed=Decimal(match.group("speed")),
-            trigger=match.group("trigger"),
-        )
+        return cls(reel, speed_dec, trigger)
 
 
 @dataclass
