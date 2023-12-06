@@ -310,7 +310,7 @@ class EDLReader:
             should_start_new_event = False
 
             # Handle top-level NoteFormStatements
-            if isinstance(statement, NoteFormStatement):
+            if isinstance(statement, NoteFormStatement) and not statement.is_comment:
                 statement_identifier = statement.statement_identifier
 
                 if statement_identifier is NoteFormStatement.NoteFormIdentifiers.FCM:
