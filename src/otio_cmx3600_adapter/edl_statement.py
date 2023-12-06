@@ -112,12 +112,19 @@ class MotionDirective:
     speed: Decimal
     trigger: str
 
+    # This implements all the fields from page 20 of the CMX spec - we don't
+    # currently use them all, but they're here for completeness.
+    MOTION_RE = re.compile(
+        r"^(?P<reel>.*?)\s+(?P<speed>-?[0-9\.]+)\s*(?P<reference>\S*?)\s*"
+        r"(?P<timing_relationship>\S*?)\s*(?P<trigger_sign>[+-]?)(?P<trigger>[0-9:]{11})$"
+    )
+
     @classmethod
     def from_string(cls, motion_directive: str):
-        parts = motion_directive.split()
-        reel = parts.pop(0)
-        speed = parts.pop(0)
-        trigger = parts.pop().strip("+").strip("-")
+        match = cls.MOTION_RE.match(motion_directive)
+        reel = match.group("reel").strip()
+        speed = match.group("speed")
+        trigger = match.group("trigger")
         try:
             speed_dec = Decimal(speed)
         except decimal.InvalidOperation:
