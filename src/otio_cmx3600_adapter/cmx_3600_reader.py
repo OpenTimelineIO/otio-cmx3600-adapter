@@ -581,7 +581,7 @@ class EDLReader:
             statement.statement_identifier
             is NoteFormStatement.NoteFormIdentifiers.MOTION_MEMORY
         ):
-            time_scalar = statement.motion_directive.speed / self.edit_rate
+            time_scalar = float(statement.motion_directive.speed) / self.edit_rate
             if time_scalar == 0.0:
                 clip.effects.append(otio.schema.FreezeFrame())
             else:
