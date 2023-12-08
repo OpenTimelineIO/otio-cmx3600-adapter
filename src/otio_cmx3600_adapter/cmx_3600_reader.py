@@ -342,6 +342,10 @@ class EDLReader:
                     # TODO: How do we make the edit number on this statement not win?
                     # Perhaps the loop keeps a None Edit number until it hits an explicit one?
                     should_start_new_event = True
+                elif current_event is None:
+                    raise EDLParseError(
+                        f"Unknown statement type on line {statement.line_number}"
+                    )
 
             # accumulate statements in the same event
             edit_number_changed = (
