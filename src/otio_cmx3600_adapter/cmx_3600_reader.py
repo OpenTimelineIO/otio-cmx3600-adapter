@@ -52,7 +52,7 @@ CHANNEL_MAP = {
 def read_from_file(
     filepath,
     rate=24,
-    ignore_timecode_mismatch=False,
+    ignore_timecode_mismatch=True,
     ignore_invalid_timecode_errors=False,
 ):
     try:
@@ -71,12 +71,15 @@ def read_from_file(
 def read_from_string(
     input_str,
     rate=24,
-    ignore_timecode_mismatch=False,
+    ignore_timecode_mismatch=True,
     ignore_invalid_timecode_errors=False,
 ):
+    if not ignore_timecode_mismatch:
+        raise DeprecationWarning(
+            "ignore_timecode_mismatch is now always enabled."
+        )
     reader = EDLReader(
         edl_rate=rate,
-        ignore_timecode_mismatch=ignore_timecode_mismatch,
         ignore_invalid_timecode_errors=ignore_invalid_timecode_errors,
     )
     reader.load_from_statements(edl_parser.statements_from_string(input_str))
@@ -262,14 +265,12 @@ class EDLReader:
     def __init__(
         self,
         edl_rate=24,
-        ignore_timecode_mismatch=False,
         ignore_invalid_timecode_errors=False,
     ):
         """
 
         Args:
             edl_rate:
-            ignore_timecode_mismatch:
             ignore_record_timeline_errors: If a record timecode is invalid,
              drops the frame count off the end and uses that value (floor to the nearest second)
         """
@@ -283,7 +284,6 @@ class EDLReader:
         self.handled_timeline_init = False
         self.current_timeline_start_offset = None
         self._edl_rate = edl_rate
-        self.ignore_timecode_mismatch = ignore_timecode_mismatch
         self.ignore_invalid_timecode_errors = ignore_invalid_timecode_errors
 
     @property
@@ -309,7 +309,6 @@ class EDLReader:
             self.video_tracks.append(track)
 
     def load_from_statements(self, statements: Iterator[EDLStatement]):
-        tc_force_drop = False
         event_statements = []
         current_event = None
         for statement in statements:
@@ -543,8 +542,7 @@ class EDLReader:
                 f"Transition type '{effect.type}' on line {statement.line_number}"
                 " not supported by the CMX EDL reader currently."
             )
-        # TODO: support delayed transition like described here:
-        # https://xmil.biz/EDL-X/CMX3600.pdf
+
         if effect.transition_duration is None:
             raise EDLParseError(
                 f"Transition type '{effect.type}' on line {statement.line_number}"
@@ -831,7 +829,7 @@ class EDLReader:
                 )
             )
             raise EDLParseError(
-                f"Overlapping record in value for event{s if len(events) > 1 else ''}"
+                f"Overlapping record in value for event{'s' if len(events) > 1 else ''}"
                 f" {', '.join(events)}"
             )
 
@@ -911,26 +909,18 @@ class EDLReader:
             record_tc_in = clip_timecode_metadata["record_tc_in"]
             record_tc_out = clip_timecode_metadata["record_tc_out"]
 
-            record_start_time, rec_start_adjusted = from_timecode_approx(
-                record_tc_in, self.edit_rate, self.ignore_invalid_timecode_errors
+            record_range, rec_tc_adjusted = from_timecode_range_approx(
+                record_tc_in, record_tc_out, self.edit_rate, self.ignore_invalid_timecode_errors
             )
-            record_end_time, rec_end_adjusted = from_timecode_approx(
-                record_tc_out, self.edit_rate, self.ignore_invalid_timecode_errors
-            )
-            record_range = opentime.range_from_start_end_time(
-                record_start_time, record_end_time
-            )
-            if rec_start_adjusted:
-                clip.metadata[METADATA_NAMESPACE][f"record_start_{TIMECODE_WAS_ADJUSTED_KEY}"] = True
-            if rec_end_adjusted:
-                clip.metadata[METADATA_NAMESPACE][f"record_end_{TIMECODE_WAS_ADJUSTED_KEY}"] = True
+            if rec_tc_adjusted:
+                clip.metadata[METADATA_NAMESPACE][f"record_{TIMECODE_WAS_ADJUSTED_KEY}"] = True
 
             # If the previous range is implicit, extend it based on context
             if previous_range_is_implicit:
                 previous_record_range = clip_record_ranges[-1]
                 # Run the range up to the start of this clip
                 previous_record_range = opentime.range_from_start_end_time(
-                    previous_record_range.start_time, record_start_time
+                    previous_record_range.start_time, record_range.start_time
                 )
                 clip_record_ranges[-1] = previous_record_range
 
@@ -947,22 +937,16 @@ class EDLReader:
             src_tc_in = clip_timecode_metadata["source_tc_in"]
             src_tc_out = clip_timecode_metadata["source_tc_out"]
 
-            src_start_time, src_start_adjusted = from_timecode_approx(
-                src_tc_in, self.edit_rate, self.ignore_invalid_timecode_errors
+            src_range, src_tc_adjusted = from_timecode_range_approx(
+                src_tc_in, src_tc_out, self.edit_rate, self.ignore_invalid_timecode_errors
             )
-            src_end_time , src_end_adjusted = from_timecode_approx(
-                src_tc_out, self.edit_rate, self.ignore_invalid_timecode_errors
-            )
-            src_range = opentime.range_from_start_end_time(src_start_time, src_end_time)
-            if src_start_adjusted:
-                clip.metadata[METADATA_NAMESPACE][f"source_start_{TIMECODE_WAS_ADJUSTED_KEY}"] = True
-            if src_end_adjusted:
-                clip.metadata[METADATA_NAMESPACE][f"source_end_{TIMECODE_WAS_ADJUSTED_KEY}"] = True
+            if src_tc_adjusted:
+                clip.metadata[METADATA_NAMESPACE][f"source_{TIMECODE_WAS_ADJUSTED_KEY}"] = True
 
             # Determine what the source duration should be back-calculated from
             # the timeline duration
             calculated_src_duration = record_range.duration.rescaled_to(
-                src_start_time.rate
+                src_range.start_time.rate
             )
 
             # Most source/timeline mismatches are due to a source timecode rate
@@ -970,12 +954,8 @@ class EDLReader:
             # trustworthy in these cases, we favor protecting the overall
             # timeline timing.
             clip.source_range = opentime.TimeRange(
-                src_start_time, calculated_src_duration
+                src_range.start_time, calculated_src_duration
             )
-
-            # If ignore TC mismatch is enabled, just go with this value
-            if self.ignore_timecode_mismatch:
-                continue
 
             record_tc_in = clip_timecode_metadata["record_tc_in"]
             record_tc_out = clip_timecode_metadata["record_tc_out"]
@@ -993,12 +973,8 @@ class EDLReader:
                     >= 1
                 )
                 if not clip_has_timing_effect:
-                    raise EDLParseError(
-                        "Source and record duration don't match: {} != {}"
-                        " for clip {}".format(
-                            src_range.duration, record_range.duration, clip.name
-                        )
-                    )
+                    # Tag possibly erroneous timing
+                    clip.metadata[METADATA_NAMESPACE]["had_timecode_mismatch"] = True
 
                 """
                 # Sometimes the math doesn't work out for various rounding and
@@ -1084,6 +1060,25 @@ def from_timecode_approx(
         return opentime.from_timecode(timecode, rate=inferred_rate), True
     except ValueError:
         raise timecode_exception
+
+
+def from_timecode_range_approx(
+        start_timecode: str, end_timecode: str,  rate: float, ignore_invalid_timecode_errors=False
+) -> tuple[opentime.TimeRange, bool]:
+    """
+    Generates a time range for the provided timecodes, adjusting them if invalid for the rate.
+
+    Returns a tuple of the time range and a boolean indicating if the timecodes were adjusted.
+    """
+    start_time, did_adjust_start_timecode = from_timecode_approx(
+        start_timecode, rate, ignore_invalid_timecode_errors
+    )
+    end_time, did_adjust_end_timecode = from_timecode_approx(
+        end_timecode, rate, ignore_invalid_timecode_errors
+    )
+    time_range = opentime.range_from_start_end_time(start_time, end_time)
+
+    return time_range, did_adjust_start_timecode or did_adjust_end_timecode
 
 
 def _get_image_sequence_url(clip):

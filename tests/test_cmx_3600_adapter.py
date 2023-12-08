@@ -1212,16 +1212,12 @@ V     C        00:00:00:00 00:00:00:05 00:00:00:00 00:00:00:05
             )
 
     def test_invalid_record_timecode(self):
+        # There are timecodes beyond the 23 frame limit in this EDL that cause a
+        # ValueError when parsed at 24fps.
         with self.assertRaises(ValueError):
-            tl = otio.adapters.read_from_file(TIMECODE_MISMATCH_TEST)
-        with self.assertRaises(cmx_3600.EDLParseError):
-            tl = otio.adapters.read_from_file(TIMECODE_MISMATCH_TEST, rate=25)
+            otio.adapters.read_from_file(TIMECODE_MISMATCH_TEST)
 
-        tl = otio.adapters.read_from_file(
-            TIMECODE_MISMATCH_TEST,
-            rate=25,
-            ignore_timecode_mismatch=True
-        )
+        tl = otio.adapters.read_from_file(TIMECODE_MISMATCH_TEST, rate=25)
         expected_duration = (
             otio.opentime.from_timecode("00:00:19:19", 25) - otio.opentime.from_timecode("00:00:17:22", 25)
         )
