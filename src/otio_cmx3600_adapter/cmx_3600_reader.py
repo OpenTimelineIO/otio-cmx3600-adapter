@@ -435,15 +435,18 @@ class EDLReader:
         # get the clip name
         comment_clip_name = event_comments.handled.get(clip_name_key)
         clip.name = self.name_for_clip(clip, comment_clip_name, statement.edit_number)
-        if comment_clip_name:
-            # Stash the canonical clip name so downstream consumers can tell
-            # if the otio clip.name was inferred
-            cmx_metadata["clip_name"] = comment_clip_name
+        # Stash the canonical clip name or None so downstream consumers can tell
+        # if the otio clip.name was inferred
+        cmx_metadata["clip_name"] = comment_clip_name
+
+        # A reel name of `AX` represents an unknown or auxilary source
+        # We don't currently track these sources outside of this adapter
+        # So lets skip adding AX reels as metadata for now,
+        # as that would dirty json outputs with non-relevant information
+        if statement.source_identification != "AX":
+            cmx_metadata["reel"] = statement.source_identification
 
         # Copy useful metadata from the statement
-        reel_special_source = statement.special_source
-        if reel_special_source is None:
-            cmx_metadata["reel"] = statement.source_identification
         cmx_metadata["original_timecode"] = {
             "source_tc_in": statement.source_entry,
             "source_tc_out": statement.source_exit,
