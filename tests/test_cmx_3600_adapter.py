@@ -7,8 +7,7 @@
 
 # python
 import os
-import tempfile
-from tempfile import TemporaryDirectory  # noqa: F401
+from pathlib import Path
 
 import pytest
 import opentimelineio as otio
@@ -223,60 +222,62 @@ def test_edl_round_trip_mem2disk2mem(cmx_adapter, assertJsonEqual):
         cmx_adapter.write_to_string(tl)
 
 
-def test_edl_round_trip_disk2mem2disk_speed_effects(cmx_adapter, assertJsonEqual):
+def test_edl_round_trip_disk2mem2disk_speed_effects(
+    cmx_adapter, assertJsonEqual, tmp_path: Path
+):
     test_edl = SPEED_EFFECTS_TEST_SMALL
     timeline = cmx_adapter.read_from_file(test_edl)
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        tmp_path = os.path.join(
-            temp_dir, "test_edl_round_trip_disk2mem2disk_speed_effects.edl"
-        )
+    tmp_path = os.path.join(
+        tmp_path, "test_edl_round_trip_disk2mem2disk_speed_effects.edl"
+    )
 
-        cmx_adapter.write_to_file(timeline, tmp_path)
+    cmx_adapter.write_to_file(timeline, tmp_path)
 
-        result = cmx_adapter.read_from_file(tmp_path)
+    result = cmx_adapter.read_from_file(tmp_path)
 
-        # When debugging, you can use this to see the difference in the OTIO
-        # cmx_3600.otio_json.write_to_file(timeline, "/tmp/original.otio")
-        # cmx_3600.otio_json.write_to_file(result, "/tmp/output.otio")
-        # os.system("xxdiff /tmp/{original,output}.otio")
+    # When debugging, you can use this to see the difference in the OTIO
+    # cmx_3600.otio_json.write_to_file(timeline, "/tmp/original.otio")
+    # cmx_3600.otio_json.write_to_file(result, "/tmp/output.otio")
+    # os.system("xxdiff /tmp/{original,output}.otio")
 
-        # When debugging, use this to see the difference in the EDLs on disk
-        # os.system("xxdiff {} {}&".format(test_edl, tmp_path))
+    # When debugging, use this to see the difference in the EDLs on disk
+    # os.system("xxdiff {} {}&".format(test_edl, tmp_path))
 
-        # The in-memory OTIO representation should be the same
+    # The in-memory OTIO representation should be the same
     assertJsonEqual(timeline, result)
 
 
-def test_edl_round_trip_disk2mem2disk(cmx_adapter, assertIsOTIOEquivalentTo):
+def test_edl_round_trip_disk2mem2disk(
+    cmx_adapter, assertIsOTIOEquivalentTo, tmp_path: Path
+):
     timeline = cmx_adapter.read_from_file(SCREENING_EXAMPLE_PATH)
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        tmp_path = os.path.join(temp_dir, "test_edl_round_trip_disk2mem2disk.edl")
+    tmp_path = os.path.join(tmp_path, "test_edl_round_trip_disk2mem2disk.edl")
 
-        cmx_adapter.write_to_file(timeline, tmp_path)
+    cmx_adapter.write_to_file(timeline, tmp_path)
 
-        result = cmx_adapter.read_from_file(tmp_path)
+    result = cmx_adapter.read_from_file(tmp_path)
 
-        # When debugging, you can use this to see the difference in the OTIO
-        # cmx_3600.otio_json.write_to_file(timeline, "/tmp/original.otio")
-        # cmx_3600.otio_json.write_to_file(result, "/tmp/output.otio")
-        # os.system("opendiff /tmp/{original,output}.otio")
+    # When debugging, you can use this to see the difference in the OTIO
+    # cmx_3600.otio_json.write_to_file(timeline, "/tmp/original.otio")
+    # cmx_3600.otio_json.write_to_file(result, "/tmp/output.otio")
+    # os.system("opendiff /tmp/{original,output}.otio")
 
-        original_json = otio.adapters.write_to_string(timeline, "otio_json")
-        output_json = otio.adapters.write_to_string(result, "otio_json")
-        assert original_json == output_json
+    original_json = otio.adapters.write_to_string(timeline, "otio_json")
+    output_json = otio.adapters.write_to_string(result, "otio_json")
+    assert original_json == output_json
 
-        # The in-memory OTIO representation should be the same
-        assertIsOTIOEquivalentTo(timeline, result)
+    # The in-memory OTIO representation should be the same
+    assertIsOTIOEquivalentTo(timeline, result)
 
-        # When debugging, use this to see the difference in the EDLs on disk
-        # os.system("opendiff {} {}".format(SCREENING_EXAMPLE_PATH, tmp_path))
+    # When debugging, use this to see the difference in the EDLs on disk
+    # os.system("opendiff {} {}".format(SCREENING_EXAMPLE_PATH, tmp_path))
 
-        # But the EDL text on disk are *not* byte-for-byte identical
-        with open(SCREENING_EXAMPLE_PATH) as original_file:
-            with open(tmp_path) as output_file:
-                assert original_file.read() != output_file.read()
+    # But the EDL text on disk are *not* byte-for-byte identical
+    with open(SCREENING_EXAMPLE_PATH) as original_file:
+        with open(tmp_path) as output_file:
+            assert original_file.read() != output_file.read()
 
 
 def test_regex_flexibility(cmx_adapter, assertIsOTIOEquivalentTo):
@@ -521,34 +522,33 @@ def test_fade_to_black(cmx_adapter):
     assert tl.tracks[0][2].source_range.start_time.value == 0
 
 
-def test_edl_round_trip_with_transitions(cmx_adapter):
-    with tempfile.TemporaryDirectory() as temp_dir:
-        # Notes:
-        # - the writer does not handle wipes, only dissolves
-        # - the writer can generate invalid EDLs if spaces are in reel names.
-        for edl_file in [
-            DISSOLVE_TEST,
-            DISSOLVE_TEST_2,
-            DISSOLVE_TEST_3,
-            DISSOLVE_TEST_4,
-        ]:
-            edl_name = os.path.basename(edl_file)
-            timeline = cmx_adapter.read_from_file(edl_file)
-            tmp_path = os.path.join(temp_dir, f"test_edl_round_trip_{edl_name}")
-            cmx_adapter.write_to_file(timeline, tmp_path)
+DISSOLVE_TESTS = [DISSOLVE_TEST, DISSOLVE_TEST_2, DISSOLVE_TEST_3, DISSOLVE_TEST_4]
 
-            result = cmx_adapter.read_from_file(tmp_path)
-            assert len(timeline.tracks) == len(result.tracks)
-            for track, res_track in zip(timeline.tracks, result.tracks):
-                assert len(track) == len(res_track)
-                for child, res_child in zip(track, res_track):
-                    assert type(child) is type(res_child)
-                    if isinstance(child, otio.schema.Transition):
-                        assert child.in_offset == res_child.in_offset
-                        assert child.out_offset == res_child.out_offset
-                        assert child.transition_type == res_child.transition_type
-                    else:
-                        assert child.source_range == res_child.source_range
+
+@pytest.mark.parametrize(
+    "edl_file", DISSOLVE_TESTS, ids=[os.path.basename(path) for path in DISSOLVE_TESTS]
+)
+def test_edl_round_trip_with_transitions(cmx_adapter, tmp_path: Path, edl_file):
+    # Notes:
+    # - the writer does not handle wipes, only dissolves
+    # - the writer can generate invalid EDLs if spaces are in reel names.
+    edl_name = os.path.basename(edl_file)
+    timeline = cmx_adapter.read_from_file(edl_file)
+    tmp_path = os.path.join(tmp_path, f"test_edl_round_trip_{edl_name}")
+    cmx_adapter.write_to_file(timeline, tmp_path)
+
+    result = cmx_adapter.read_from_file(tmp_path)
+    assert len(timeline.tracks) == len(result.tracks)
+    for track, res_track in zip(timeline.tracks, result.tracks):
+        assert len(track) == len(res_track)
+        for child, res_child in zip(track, res_track):
+            assert type(child) is type(res_child)
+            if isinstance(child, otio.schema.Transition):
+                assert child.in_offset == res_child.in_offset
+                assert child.out_offset == res_child.out_offset
+                assert child.transition_type == res_child.transition_type
+            else:
+                assert child.source_range == res_child.source_range
 
 
 def test_edl_25fps(cmx_adapter):
