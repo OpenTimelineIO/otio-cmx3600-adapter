@@ -4,13 +4,11 @@ from pathlib import Path
 from pytest import fixture
 from opentimelineio import adapters, plugins
 
+import otio_cmx3600_adapter.cmx_3600
+
 
 @fixture
 def cmx_adapter():
-    manifest_path = (
-        Path(__file__).parent.parent / "src/otio_cmx3600_adapter/cmx_3600.py"
-    )
-
     # Use OTIO's native plugin loading system
     # This verifies that the adapter is being correctly registered and
     # discovered by OTIO.
@@ -23,7 +21,9 @@ def cmx_adapter():
     )
 
     # Assert that the loaded adapter is the local one.
-    assert Path(adapter.module_abs_path()) == manifest_path
+    assert Path(adapter.module_abs_path()) == Path(
+        otio_cmx3600_adapter.cmx_3600.__file__
+    )
     return adapter
 
 
