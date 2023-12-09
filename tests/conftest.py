@@ -8,10 +8,23 @@ from opentimelineio import adapters, plugins
 @fixture
 def cmx_adapter():
     manifest_path = (
-        Path(__file__).parent.parent / "src/otio_cmx3600_adapter/plugin_manifest.json"
+        Path(__file__).parent.parent / "src/otio_cmx3600_adapter/cmx_3600.py"
     )
-    manifest = plugins.manifest.manifest_from_file(str(manifest_path))
-    return next(adapter for adapter in manifest.adapters if adapter.name == "cmx_3600")
+
+    # Use OTIO's native plugin loading system
+    # This verifies that the adapter is being correctly registered and
+    # discovered by OTIO.
+    # But it also means the tests require you to install the adapter before
+    # running the tests.
+    manifest = plugins.ActiveManifest()
+
+    adapter = next(
+        adapter for adapter in manifest.adapters if adapter.name == "cmx_3600"
+    )
+
+    # Assert that the loaded adapter is the local one.
+    assert Path(adapter.module_abs_path()) == manifest_path
+    return adapter
 
 
 @fixture

@@ -47,8 +47,3 @@ otio_cmx3600_adapter = "otio_cmx3600_adapter"
 # Ensure the sdist includes a setup.py for older pip versions
 support-legacy = true
 exclude = [".github"]
-
-[tool.pytest.ini_options]
-pythonpath = [
-  "src"
-]
