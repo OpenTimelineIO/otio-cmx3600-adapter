@@ -16,10 +16,12 @@ from typing import Optional
 
 from .exceptions import EDLParseError
 
+
 class SourceMode(Enum):
     """
     Which source type the edit applies to.
     """
+
     VIDEO = "V"
     AUDIO = "A"
     BOTH = "B"
@@ -33,6 +35,7 @@ class EffectType(Enum):
     """
     Type of effect.
     """
+
     # Single source effects
     CUT = "C"
     SYNC_ROLL = "R"
@@ -128,9 +131,7 @@ class MotionDirective:
         try:
             speed_dec = Decimal(speed)
         except decimal.InvalidOperation:
-            raise EDLParseError(
-                f"Unsupported M2 Effect format: '{motion_directive}'"
-            )
+            raise EDLParseError(f"Unsupported M2 Effect format: '{motion_directive}'")
 
         return cls(reel, speed_dec, trigger)
 
@@ -178,6 +179,7 @@ class NoteFormStatement(EDLStatement):
     """
     This is used for all well-known note form statements.
     """
+
     class NoteFormIdentifiers(Enum):
         # System directives (From SMPTE 258M)
         TITLE = "TITLE"  # Also in CMX
@@ -224,9 +226,7 @@ class NoteFormStatement(EDLStatement):
     is_comment: bool = True
 
     # extracts the identifier minus leading * and surrounding whitespace
-    STATEMENT_RE = re.compile(
-        r"^(?P<is_comment>\*)?\s*(?P<statement_value>.*(?<! ))"
-    )
+    STATEMENT_RE = re.compile(r"^(?P<is_comment>\*)?\s*(?P<statement_value>.*(?<! ))")
 
     @classmethod
     def identifiers(cls) -> list[str]:
@@ -320,7 +320,6 @@ class NoteFormStatement(EDLStatement):
 
 @dataclass
 class StandardFormStatement(EDLStatement):
-
     source_identification: str = ""
     channels: str = "V"
     edit_type: str = "C"

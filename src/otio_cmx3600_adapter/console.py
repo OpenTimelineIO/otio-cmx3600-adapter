@@ -1,7 +1,6 @@
 import argparse
 
 from .edl_parser import statements_from_string
-from . import edl_statement
 
 
 def edldump():

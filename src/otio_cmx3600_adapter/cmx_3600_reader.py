@@ -81,9 +81,7 @@ def read_from_string(
     discard_unsupported_events=False,
 ):
     if not ignore_timecode_mismatch:
-        raise DeprecationWarning(
-            "ignore_timecode_mismatch is now always enabled."
-        )
+        raise DeprecationWarning("ignore_timecode_mismatch is now always enabled.")
     reader = EDLReader(
         edl_rate=rate,
         ignore_invalid_timecode_errors=ignore_invalid_timecode_errors,
@@ -310,7 +308,9 @@ class EDLReader:
         self._current_timeline = new_timeline
         self.tracks_by_name = {track.name: track for track in new_timeline.tracks}
         self.video_tracks = [
-            track for track in new_timeline.tracks if track.kind == otio.schema.TrackKind.Video
+            track
+            for track in new_timeline.tracks
+            if track.kind == otio.schema.TrackKind.Video
         ]
         self.handled_timeline_init = False
         self.current_timeline_start_offset = None
@@ -381,8 +381,16 @@ class EDLReader:
                     self.process_event_statements(event_statements)
                 except EDLParseError:
                     if self.discard_unsupported_events:
-                        timeline_cmx_metadata = self.current_timeline.metadata.setdefault(METADATA_NAMESPACE, {})
-                        timeline_cmx_metadata.setdefault("unsupported_events", []).extend(set(statement.edit_number for statement in event_statements))
+                        timeline_cmx_metadata = (
+                            self.current_timeline.metadata.setdefault(
+                                METADATA_NAMESPACE, {}
+                            )
+                        )
+                        timeline_cmx_metadata.setdefault(
+                            "unsupported_events", []
+                        ).extend(
+                            set(statement.edit_number for statement in event_statements)
+                        )
                     else:
                         raise
 
@@ -400,8 +408,12 @@ class EDLReader:
                 self.process_event_statements(event_statements)
             except EDLParseError:
                 if self.discard_unsupported_events:
-                    timeline_cmx_metadata = self.current_timeline.metadata.setdefault(METADATA_NAMESPACE, {})
-                    timeline_cmx_metadata.setdefault("unsupported_events", []).extend(set(statement.edit_number for statement in event_statements))
+                    timeline_cmx_metadata = self.current_timeline.metadata.setdefault(
+                        METADATA_NAMESPACE, {}
+                    )
+                    timeline_cmx_metadata.setdefault("unsupported_events", []).extend(
+                        set(statement.edit_number for statement in event_statements)
+                    )
                 else:
                     raise
 
@@ -585,8 +597,8 @@ class EDLReader:
             raise EDLParseError(
                 f"Transition type '{effect.type}' on line {statement.line_number}"
                 "is missing a duration.",
-                line_number = statement.line_number,
-                event_number = statement.edit_number,
+                line_number=statement.line_number,
+                event_number=statement.edit_number,
             )
         transition_duration = opentime.RationalTime(
             effect.transition_duration,
@@ -723,7 +735,10 @@ class EDLReader:
                 )
                 tl_cmx_metadata["edl_rate"] = self.edit_rate
                 try:
-                    self.current_timeline.global_start_time, was_adjusted = from_timecode_approx(
+                    (
+                        self.current_timeline.global_start_time,
+                        was_adjusted,
+                    ) = from_timecode_approx(
                         statement.sync_entry,
                         self.edit_rate,
                         self.ignore_invalid_timecode_errors,
@@ -784,7 +799,7 @@ class EDLReader:
             self.place_items_in_timeline(edit_items, timeline_range, channels)
 
     def tracks_for_channel(
-            self, channel_code: str, timeline_range: opentime.TimeRange
+        self, channel_code: str, timeline_range: opentime.TimeRange
     ) -> list[otio.schema.Track]:
         # Expand channel shorthand into a list of track names.
         if channel_code in CHANNEL_MAP:
@@ -794,7 +809,7 @@ class EDLReader:
 
         # Get the tracks, creating any channels we don't already have
         relative_start_time = (
-                timeline_range.start_time - self.current_timeline_start_offset
+            timeline_range.start_time - self.current_timeline_start_offset
         )
         out_tracks = []
         for track_name in track_names:
@@ -819,7 +834,9 @@ class EDLReader:
                     for overlay_track in self.video_tracks:
                         if overlay_track is track:
                             continue
-                        overlay_children = overlay_track.children_in_range(timeline_range)
+                        overlay_children = overlay_track.children_in_range(
+                            timeline_range
+                        )
                         if len(overlay_children) == 0:
                             track = overlay_track
                             break
@@ -861,9 +878,7 @@ class EDLReader:
             events = sorted(
                 set(
                     itertools.chain.from_iterable(
-                        item.metadata.get(METADATA_NAMESPACE, {}).get(
-                            "events"
-                        )
+                        item.metadata.get(METADATA_NAMESPACE, {}).get("events")
                         for item in items
                     )
                 )
@@ -910,9 +925,7 @@ class EDLReader:
                     if event_number not in existing_events:
                         existing_events.append(event_number)
 
-                existing_clip.metadata[METADATA_NAMESPACE][
-                    "events"
-                ] = existing_events
+                existing_clip.metadata[METADATA_NAMESPACE]["events"] = existing_events
                 items = items[1:]
 
             if len(target_tracks) > 1:
@@ -931,7 +944,7 @@ class EDLReader:
         Timeline timing:
         - for each clip in event, use rec start for timeline placement
         - If a clip has a rec end time different from the start, use it
-        
+
         Clip Timing:
         - After the timeline has been resolved and all event statements have been
             processed, back calculate source duration through any time warps from the
@@ -950,10 +963,15 @@ class EDLReader:
             record_tc_out = clip_timecode_metadata["record_tc_out"]
 
             record_range, rec_tc_adjusted = from_timecode_range_approx(
-                record_tc_in, record_tc_out, self.edit_rate, self.ignore_invalid_timecode_errors
+                record_tc_in,
+                record_tc_out,
+                self.edit_rate,
+                self.ignore_invalid_timecode_errors,
             )
             if rec_tc_adjusted:
-                clip.metadata[METADATA_NAMESPACE][f"record_{TIMECODE_WAS_ADJUSTED_KEY}"] = True
+                clip.metadata[METADATA_NAMESPACE][
+                    f"record_{TIMECODE_WAS_ADJUSTED_KEY}"
+                ] = True
 
             # If the previous range is implicit, extend it based on context
             if previous_range_is_implicit:
@@ -978,10 +996,15 @@ class EDLReader:
             src_tc_out = clip_timecode_metadata["source_tc_out"]
 
             src_range, src_tc_adjusted = from_timecode_range_approx(
-                src_tc_in, src_tc_out, self.edit_rate, self.ignore_invalid_timecode_errors
+                src_tc_in,
+                src_tc_out,
+                self.edit_rate,
+                self.ignore_invalid_timecode_errors,
             )
             if src_tc_adjusted:
-                clip.metadata[METADATA_NAMESPACE][f"source_{TIMECODE_WAS_ADJUSTED_KEY}"] = True
+                clip.metadata[METADATA_NAMESPACE][
+                    f"source_{TIMECODE_WAS_ADJUSTED_KEY}"
+                ] = True
 
             # Determine what the source duration should be back-calculated from
             # the timeline duration
@@ -1103,7 +1126,10 @@ def from_timecode_approx(
 
 
 def from_timecode_range_approx(
-        start_timecode: str, end_timecode: str,  rate: float, ignore_invalid_timecode_errors=False
+    start_timecode: str,
+    end_timecode: str,
+    rate: float,
+    ignore_invalid_timecode_errors=False,
 ) -> tuple[opentime.TimeRange, bool]:
     """
     Generates a time range for the provided timecodes, adjusting them if invalid for the rate.
@@ -1143,7 +1169,7 @@ def _clips_are_continuous(clip_1: otio.schema.Clip, clip_2: otio.schema.Clip) ->
     if clip_1_reel != clip_2_reel:
         return False
 
-    if type(clip_1.media_reference) != type(clip_2.media_reference):
+    if type(clip_1.media_reference) != type(clip_2.media_reference):  # noqa: E721
         return False
 
     if hasattr(clip_1, "target_url"):
@@ -1213,7 +1239,5 @@ def _should_merge_clip_to_track(
     item_before_existing = track[-2]
     if not isinstance(item_before_existing, otio.schema.Transition):
         return False
-
-    clip_is_all_transition = item_before_existing.out_offset == existing_item.duration()
 
     return _clips_are_continuous(existing_item, clip)
