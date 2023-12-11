@@ -439,6 +439,12 @@ class EDLReader:
         clip_metadata = {METADATA_NAMESPACE: cmx_metadata}
 
         # Copy metadata
+        if "locators" in event_comments.handled:
+            clip.markers.extend(event_comments.handled["locators"])
+
+        if event_comments.unhandled:
+            cmx_metadata["comments"] = event_comments.unhandled
+
         if is_from_clip:
             clip_name_key = "clip_name"
             # Copy all the metadata except the TO clip info
@@ -454,12 +460,6 @@ class EDLReader:
                 )
 
                 clip_metadata["cdl"] = dict(asc_sat=sat, asc_sop=sop)
-
-            if "locators" in event_comments.handled:
-                clip.markers.extend(event_comments.handled["locators"])
-
-            if event_comments.unhandled:
-                cmx_metadata["comments"] = event_comments.unhandled
 
         else:
             clip_name_key = "dest_clip_name"
