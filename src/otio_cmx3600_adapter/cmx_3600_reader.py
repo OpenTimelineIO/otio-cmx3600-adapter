@@ -54,6 +54,7 @@ def read_from_file(
     rate=24,
     ignore_timecode_mismatch=True,
     ignore_invalid_timecode_errors=False,
+    discard_unsupported_events=False,
 ):
     try:
         with open(filepath) as fo:
@@ -64,7 +65,11 @@ def read_from_file(
             contents = fo.read()
 
     return read_from_string(
-        contents, rate, ignore_timecode_mismatch, ignore_invalid_timecode_errors
+        contents,
+        rate,
+        ignore_timecode_mismatch,
+        ignore_invalid_timecode_errors,
+        discard_unsupported_events,
     )
 
 
@@ -73,6 +78,7 @@ def read_from_string(
     rate=24,
     ignore_timecode_mismatch=True,
     ignore_invalid_timecode_errors=False,
+    discard_unsupported_events=False,
 ):
     if not ignore_timecode_mismatch:
         raise DeprecationWarning(
@@ -81,8 +87,13 @@ def read_from_string(
     reader = EDLReader(
         edl_rate=rate,
         ignore_invalid_timecode_errors=ignore_invalid_timecode_errors,
+        discard_unsupported_events=discard_unsupported_events,
     )
-    reader.load_from_statements(edl_parser.statements_from_string(input_str))
+    reader.load_from_statements(
+        edl_parser.statements_from_string(
+            input_str, allow_best_effort_parsing=discard_unsupported_events
+        )
+    )
 
     # The reader returns a timeline per TITLE entry, if there are multiples
     # wrap them in a bin first.
@@ -266,13 +277,15 @@ class EDLReader:
         self,
         edl_rate=24,
         ignore_invalid_timecode_errors=False,
+        discard_unsupported_events=False,
     ):
         """
 
         Args:
             edl_rate:
-            ignore_record_timeline_errors: If a record timecode is invalid,
-             drops the frame count off the end and uses that value (floor to the nearest second)
+            ignore_record_timeline_errors: If a record timecode is invalid (has frames higher than the rate)
+                The frame count will be dropped and the seconds incremented to approximate the intent.
+            discard_unsupported_events: If True, unsupported events will be dropped from the timeline
         """
         self.timelines: list[otio.schema.Timeline] = []
         self.current_timeline = otio.schema.Timeline()
@@ -285,6 +298,7 @@ class EDLReader:
         self.current_timeline_start_offset = None
         self._edl_rate = edl_rate
         self.ignore_invalid_timecode_errors = ignore_invalid_timecode_errors
+        self.discard_unsupported_events = discard_unsupported_events
 
     @property
     def current_timeline(self) -> otio.schema.Timeline:
@@ -362,7 +376,14 @@ class EDLReader:
 
             # We're starting a new event, process the current statements
             if event_statements:
-                self.process_event_statements(event_statements)
+                try:
+                    self.process_event_statements(event_statements)
+                except EDLParseError:
+                    if self.discard_unsupported_events:
+                        timeline_cmx_metadata = self.current_timeline.metadata.setdefault(METADATA_NAMESPACE, {})
+                        timeline_cmx_metadata.setdefault("unsupported_events", []).extend(set(statement.edit_number for statement in event_statements))
+                    else:
+                        raise
 
             event_statements = []
             current_event = (
@@ -374,7 +395,14 @@ class EDLReader:
 
         # handle unprocessed statements when we get to EOF
         if event_statements:
-            self.process_event_statements(event_statements)
+            try:
+                self.process_event_statements(event_statements)
+            except EDLParseError:
+                if self.discard_unsupported_events:
+                    timeline_cmx_metadata = self.current_timeline.metadata.setdefault(METADATA_NAMESPACE, {})
+                    timeline_cmx_metadata.setdefault("unsupported_events", []).extend(set(statement.edit_number for statement in event_statements))
+                else:
+                    raise
 
     @property
     def edit_rate(self) -> float:

@@ -39,8 +39,11 @@ HANDLED_DIRECTIVES = set(
 )
 
 
-def statements_from_string(edl_string: str) -> Iterator[EDLStatement]:
-    return statements_from_lines(edl_string.splitlines())
+def statements_from_string(
+        edl_string: str,
+        allow_best_effort_parsing: bool = False
+) -> Iterator[EDLStatement]:
+    return statements_from_lines(edl_string.splitlines(), allow_best_effort_parsing)
 
 
 def _note_form_statement_from_line(
@@ -60,7 +63,9 @@ def _note_form_statement_from_line(
     )
 
 
-def statements_from_lines(edl_lines: Iterable[str]) -> Iterator[EDLStatement]:
+def statements_from_lines(
+        edl_lines: Iterable[str], allow_best_effort_parsing: bool = False
+) -> Iterator[EDLStatement]:
     edit_number = None
     is_virtual_edit = False
     is_recorded = False
@@ -115,7 +120,7 @@ def statements_from_lines(edl_lines: Iterable[str]) -> Iterator[EDLStatement]:
             yield _note_form_statement_from_line(line, **element_context)
             continue
 
-        if len(fields) < 6 or len(fields) > 8:
+        if len(fields) < 3:
             raise EDLParseError(
                 f"incorrect number of fields [{len(fields)}] in line number:"
                 f" {line_number} statement: {line}"
@@ -155,6 +160,12 @@ def statements_from_lines(edl_lines: Iterable[str]) -> Iterator[EDLStatement]:
                     consuming_fields.pop(0)
             elif i == 2:
                 edit_type = consuming_fields.pop(0)
+
+        if (len(fields) < 6 or len(fields) > 8) and not allow_best_effort_parsing:
+            raise EDLParseError(
+                f"incorrect number of fields [{len(fields)}] in line number:"
+                f" {line_number} statement: {line}"
+            )
 
         # Consume the record and source fields from the end of the line back
         rec_out = consuming_fields.pop()
