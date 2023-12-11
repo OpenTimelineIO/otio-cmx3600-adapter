@@ -123,7 +123,9 @@ def statements_from_lines(
         if len(fields) < 3:
             raise EDLParseError(
                 f"incorrect number of fields [{len(fields)}] in line number:"
-                f" {line_number} statement: {line}"
+                f" {line_number} statement: {line}",
+                line_number=line_number,
+                event_number=edit_number,
             )
 
         # consume the fields from the head of the line
@@ -164,7 +166,9 @@ def statements_from_lines(
         if (len(fields) < 6 or len(fields) > 8) and not allow_best_effort_parsing:
             raise EDLParseError(
                 f"incorrect number of fields [{len(fields)}] in line number:"
-                f" {line_number} statement: {line}"
+                f" {line_number} statement: {line}",
+                line_number=line_number,
+                event_number=edit_number,
             )
 
         # Consume the record and source fields from the end of the line back

@@ -358,7 +358,8 @@ class EDLReader:
                     should_start_new_event = True
                 elif current_event is None:
                     raise EDLParseError(
-                        f"Unknown statement type on line {statement.line_number}"
+                        f"Unknown statement type on line {statement.line_number}",
+                        line_number=statement.line_number,
                     )
 
             # accumulate statements in the same event
@@ -575,13 +576,17 @@ class EDLReader:
         else:
             raise EDLParseError(
                 f"Transition type '{effect.type}' on line {statement.line_number}"
-                " not supported by the CMX EDL reader currently."
+                " not supported by the CMX EDL reader currently.",
+                line_number=statement.line_number,
+                event_number=statement.edit_number,
             )
 
         if effect.transition_duration is None:
             raise EDLParseError(
                 f"Transition type '{effect.type}' on line {statement.line_number}"
-                "is missing a duration."
+                "is missing a duration.",
+                line_number = statement.line_number,
+                event_number = statement.edit_number,
             )
         transition_duration = opentime.RationalTime(
             effect.transition_duration,
