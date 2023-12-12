@@ -276,13 +276,15 @@ V     C        00:00:00:00 00:00:00:05 00:00:00:00 00:00:00:05
         # Cull out the metadata fields that are read-only
         del new_otio.metadata["cmx_3600"]
         delkeys = {"clip_name", "events", "original_timecode"}
-        for item in new_otio.children_if():
-            cmx_3600_metadata = item.metadata.get("cmx_3600", {})
-            for key in delkeys:
-                try:
-                    del cmx_3600_metadata[key]
-                except KeyError:
-                    continue
+        # TODO: replace this with children_if in otio 0.16.0
+        for track in new_otio.tracks:
+            for item in track:
+                cmx_3600_metadata = item.metadata.get("cmx_3600", {})
+                for key in delkeys:
+                    try:
+                        del cmx_3600_metadata[key]
+                    except KeyError:
+                        continue
 
         # directly compare clip with speed effect
         self.assertEqual(
@@ -1404,7 +1406,7 @@ V     C        00:00:00:00 00:00:00:05 00:00:00:00 00:00:00:05
         self.assertMultiLineEqual(result, expected)
 
         # Disable first clip in the track
-        tl.tracks[0].children_if()[0].enabled = False
+        tl.tracks[0][0].enabled = False
         result = otio.adapters.write_to_string(tl, adapter_name="cmx_3600")
         expected = r'''TITLE: enable_test
 
