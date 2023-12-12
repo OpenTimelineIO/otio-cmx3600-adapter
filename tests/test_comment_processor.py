@@ -1,5 +1,3 @@
-import opentimelineio as otio
-
 from otio_cmx3600_adapter import cmx_3600_reader
 from otio_cmx3600_adapter import edl_parser
 
