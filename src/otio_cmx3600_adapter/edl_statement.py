@@ -11,8 +11,13 @@ import re
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import Enum
-from functools import cached_property
 from typing import Optional
+
+try:
+    from functools import cached_property
+except ImportError:
+    # for < python 3.8 we'll take the performance hit of not caching
+    cached_property = property
 
 from .exceptions import EDLParseError
 
