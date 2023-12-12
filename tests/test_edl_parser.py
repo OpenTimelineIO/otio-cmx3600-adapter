@@ -13,7 +13,7 @@ def test_transition():
     transition_events = """000003  D001C003_210414A7                V     C        19:37:19:18 19:37:19:18 01:00:19:05 01:00:19:05 
 000003  A011C005_21041428                V     D    024 20:09:25:02 20:09:26:02 01:00:19:05 01:00:20:05 
 002  TST V     W001    010 01:00:08:08 01:00:08:18 01:00:00:09 01:00:00:19
-"""
+"""  # noqa: W291
     statement_1, statement_2, statement_3 = edl_parser.statements_from_string(
         transition_events
     )
@@ -23,7 +23,7 @@ def test_transition():
     assert statement_1.channels == "V"
     assert statement_1.source_mode == edl_statement.SourceMode.VIDEO
     assert statement_1.edit_type == "C"
-    assert statement_1.edit_parameter == None
+    assert statement_1.edit_parameter is None
     assert statement_1.effect.type == edl_statement.EffectType.CUT
     assert statement_1.source_entry == "19:37:19:18"
     assert statement_1.source_exit == "19:37:19:18"
@@ -61,7 +61,6 @@ def test_transition():
 
 
 def test_parse_25fps():
-
     with open(SAMPLE_DATA_PATH / "25fps.edl") as infile:
         statements = list(edl_parser.statements_from_string(infile.read()))
 
@@ -72,17 +71,26 @@ def test_parse_25fps():
         expected_line_number += 1
 
     expected_edit_numbers = [
-        None, None,
-        "001", "001", "001",
-        "002", "002", "002",
-        "003", "003", "003",
-        "004", "004", "004",
+        None,
+        None,
+        "001",
+        "001",
+        "001",
+        "002",
+        "002",
+        "002",
+        "003",
+        "003",
+        "003",
+        "004",
+        "004",
+        "004",
     ]
     edit_numbers = [statement.edit_number for statement in statements]
     assert edit_numbers == expected_edit_numbers
 
-    assert not any(statement.is_virtual_edit  for statement in statements)
-    assert not any(statement.is_recorded  for statement in statements)
+    assert not any(statement.is_virtual_edit for statement in statements)
+    assert not any(statement.is_recorded for statement in statements)
 
     expected_statement_types = [
         edl_statement.NoteFormStatement,
@@ -110,29 +118,41 @@ def test_freezeframe():
 M2   Z682_156       000.0                01:00:10:21 
 * FROM CLIP NAME:  Z682_156 (LAY3) FF 
 * * FREEZE FRAME
-"""
-    statement_1, statement_2, statement_3, statement_4 = edl_parser.statements_from_string(
-        event
+"""  # noqa: W291
+    (
+        statement_1,
+        statement_2,
+        statement_3,
+        statement_4,
+    ) = edl_parser.statements_from_string(event)
+    assert (
+        statement_2.statement_identifier
+        == edl_statement.NoteFormStatement.NoteFormIdentifiers.MOTION_MEMORY
     )
-    assert statement_2.statement_identifier == edl_statement.NoteFormStatement.NoteFormIdentifiers.MOTION_MEMORY
-    assert statement_3.statement_identifier == edl_statement.NoteFormStatement.NoteFormIdentifiers.FROM_CLIP_NAME
-    assert statement_4.statement_identifier == edl_statement.NoteFormStatement.NoteFormIdentifiers.FREEZE_FRAME
+    assert (
+        statement_3.statement_identifier
+        == edl_statement.NoteFormStatement.NoteFormIdentifiers.FROM_CLIP_NAME
+    )
+    assert (
+        statement_4.statement_identifier
+        == edl_statement.NoteFormStatement.NoteFormIdentifiers.FREEZE_FRAME
+    )
 
 
 @pytest.mark.parametrize(
     "directive,expected_reel,expected_speed,expected_trigger",
     [
         (
-                "D001C003_210414A7                         048.0 19:37:19:18",
-                "D001C003_210414A7",
-                decimal.Decimal("48.0"),
-                "19:37:19:18"
+            "D001C003_210414A7                         048.0 19:37:19:18",
+            "D001C003_210414A7",
+            decimal.Decimal("48.0"),
+            "19:37:19:18",
         ),
         (
-                "CYAN           000.0    MSTR     I +00:00:00:15",
-                "CYAN",
-                decimal.Decimal("0.0"),
-                "00:00:00:15"
+            "CYAN           000.0    MSTR     I +00:00:00:15",
+            "CYAN",
+            decimal.Decimal("0.0"),
+            "00:00:00:15",
         ),
         (
             "Z682_156 (LAY3)		0.0			01:00:10:21",
@@ -147,16 +167,14 @@ M2   Z682_156       000.0                01:00:10:21
             "08:53:21:07",
         ),
         (
-           "B001_C003_1016BW 036.0                      09:08:13:11",
-           "B001_C003_1016BW",
-           decimal.Decimal("036.0"),
-          "09:08:13:11",
-        )
-    ]
+            "B001_C003_1016BW 036.0                      09:08:13:11",
+            "B001_C003_1016BW",
+            decimal.Decimal("036.0"),
+            "09:08:13:11",
+        ),
+    ],
 )
-def test_m2_processing(
-        directive, expected_reel, expected_speed, expected_trigger
-):
+def test_m2_processing(directive, expected_reel, expected_speed, expected_trigger):
     motion_directive = edl_statement.MotionDirective.from_string(directive)
     assert motion_directive.reel == expected_reel
     assert motion_directive.speed == expected_speed
@@ -165,11 +183,7 @@ def test_m2_processing(
 
 @pytest.mark.parametrize(
     "edl_path",
-    [
-        edl_path
-        for edl_path in SAMPLE_DATA_PATH.iterdir()
-        if edl_path.suffix == ".edl"
-    ]
+    [edl_path for edl_path in SAMPLE_DATA_PATH.iterdir() if edl_path.suffix == ".edl"],
 )
 def test_all_edls_handled(edl_path):
     with open(edl_path) as infile:
