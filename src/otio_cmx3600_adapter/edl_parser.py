@@ -125,59 +125,14 @@ def statements_from_lines(
                 event_number=edit_number,
             )
 
-        # consume the fields from the head of the line to get
-        # source identification, channels, and edit type
+        # TODO: Rather than splitting on spaces, we may want to just consume
+        #   chunks off the end of the line. That way the reel name isn't re-joining
+        #   and potentially discarding spaces.
+
+        # Start consuming the fields from the tail backwards - this lets us
+        # work backward until only the reel name (which is of varying format) is
+        # leftover
         consuming_fields = fields[:]
-        source_identification = consuming_fields.pop(0)
-        channels = None
-        edit_type = None
-
-        while consuming_fields:
-            field = consuming_fields.pop(0)
-            is_valid_channel = CHANNEL_NAME_RE.fullmatch(field) is not None
-            if channels is None and not is_valid_channel:
-                # This is likely a reel name with a space in it
-                source_identification += f" {field}"
-            elif _is_effect_type(field):
-                if channels is None:
-                    # This indicates the channel assignment has no whitespace
-                    # delimiter between the reel name and it (this can happen in
-                    # cases with maxing out fixed column width reel names
-                    # Here we'll try to infer reel width based on fixed-width
-                    # reel names.
-                    if len(source_identification) > 32:
-                        # File 32 EDL
-                        reel_width = 32
-                    elif len(source_identification) > 16:
-                        # File 16 EDL
-                        reel_width = 16
-                    else:
-                        # EDL Classic (TM)
-                        reel_width = 8
-                    # If the channel doesn't look valid, see if it might have
-                    # mushed into the end of the reel
-                    channels = source_identification[reel_width:]
-                    source_identification = source_identification[:reel_width]
-
-                edit_type = field
-            elif is_valid_channel:
-                channels = field
-            elif field == "":
-                if channels is None:
-                    channels = field
-                elif edit_type is None:
-                    edit_type = field
-
-            if channels is not None and edit_type is not None:
-                break
-
-        if (len(fields) < 6 or len(fields) > 8) and not allow_best_effort_parsing:
-            raise EDLParseError(
-                f"incorrect number of fields [{len(fields)}] in line number:"
-                f" {line_number} statement: {line}",
-                line_number=line_number,
-                event_number=edit_number,
-            )
 
         # Consume the record and source fields from the end of the line back
         rec_out = consuming_fields.pop()
@@ -185,21 +140,32 @@ def statements_from_lines(
         src_out = consuming_fields.pop()
         src_in = consuming_fields.pop()
 
+        # The end field is either an edit parameter or the edit type
+        edit_parameter_or_type = consuming_fields.pop()
+        edit_parameter = None
+        if _is_effect_type(edit_parameter_or_type):
+            edit_type = edit_parameter_or_type
+        else:
+            edit_parameter = edit_parameter_or_type
+            edit_type = consuming_fields.pop()
+
+        channels = consuming_fields.pop()
+
+        # TODO: This technically could need to be multiple spaces
+        source_identification = " ".join(consuming_fields)
+
         # Parse as a standard form element
         standard_statement_fields = dict(
             source_identification=source_identification,
             channels=channels,
             edit_type=edit_type,
+            edit_parameter=edit_parameter,
             source_entry=src_in,
             source_exit=src_out,
             sync_entry=rec_in,
             sync_exit=rec_out,
             is_supported=True,
         )
-
-        # If the edit parameter was present, add it
-        if consuming_fields:
-            standard_statement_fields["edit_parameter"] = consuming_fields.pop()
 
         standard_statement_fields.update(element_context)
         yield StandardFormStatement(**standard_statement_fields)

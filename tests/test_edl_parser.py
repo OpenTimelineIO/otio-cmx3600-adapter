@@ -119,12 +119,16 @@ def test_parse_25fps():
 
         (
             "002  Start_4K_Full Aperture_24fps V     C        00:00:00:00 00:00:08:00 01:05:23:18 01:05:31:18",
-            ("002", "Start_4K_Full Aperture_24fps", "V", edl_statement.EffectType.CUT, "00:00:00:00", "00:00:08:00", "01:05:23:18", "01:05:31:18"),
+            ("002", "Start_4K_Full Aperture_24fps", "V", edl_statement.EffectType.CUT, None, "00:00:00:00", "00:00:08:00", "01:05:23:18", "01:05:31:18"),
         ),
         (
             "003197                                   V     C        00:31:45:01 00:31:53:01 03:00:39:21 03:00:47:21",
-            ("003197", "", "V", edl_statement.EffectType.CUT, "00:31:45:01", "00:31:53:01", "03:00:39:21", "03:00:47:21"),
+            ("003197", "", "V", edl_statement.EffectType.CUT, None, "00:31:45:01", "00:31:53:01", "03:00:39:21", "03:00:47:21"),
         ),
+        (
+            "000020  A010C002_210414GF                V     D    024 17:30:43:06 17:30:44:06 01:01:07:13 01:01:08:13",
+            ("000020", "A010C002_210414GF", "V", edl_statement.EffectType.DISSOLVE, "024", "17:30:43:06", "17:30:44:06", "01:01:07:13", "01:01:08:13"),
+        )
     ]
 )
 def test_line_variants(event, expected_fields):
@@ -140,10 +144,11 @@ def test_line_variants(event, expected_fields):
     assert statement.source_identification == expected_fields[1]
     assert statement.channels == expected_fields[2]
     assert statement.effect.type == expected_fields[3]
-    assert statement.source_entry == expected_fields[4]
-    assert statement.source_exit == expected_fields[5]
-    assert statement.sync_entry == expected_fields[6]
-    assert statement.sync_exit == expected_fields[7]
+    assert statement.edit_parameter == expected_fields[4]
+    assert statement.source_entry == expected_fields[5]
+    assert statement.source_exit == expected_fields[6]
+    assert statement.sync_entry == expected_fields[7]
+    assert statement.sync_exit == expected_fields[8]
 
 
 def test_freezeframe():
