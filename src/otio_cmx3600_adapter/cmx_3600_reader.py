@@ -21,7 +21,6 @@ from typing import Iterable, Iterator, Mapping, Optional, Union
 import opentimelineio as otio
 from opentimelineio import opentime
 
-from .exceptions import EDLParseError
 from . import edl_parser
 from .edl_statement import (
     EDLStatement,
@@ -30,6 +29,7 @@ from .edl_statement import (
     SpecialSource,
     StandardFormStatement,
 )
+from .exceptions import EDLParseError
 
 
 METADATA_NAMESPACE = "cmx_3600"

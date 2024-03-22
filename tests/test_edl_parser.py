@@ -113,6 +113,39 @@ def test_parse_25fps():
     assert statement_types == expected_statement_types
 
 
+@pytest.mark.parametrize(
+    "event, expected_fields",
+    [
+
+        (
+            "002  Start_4K_Full Aperture_24fps V     C        00:00:00:00 00:00:08:00 01:05:23:18 01:05:31:18",
+            ("002", "Start_4K_Full Aperture_24fps", "V", edl_statement.EffectType.CUT, "00:00:00:00", "00:00:08:00", "01:05:23:18", "01:05:31:18"),
+        ),
+        (
+            "003197                                   V     C        00:31:45:01 00:31:53:01 03:00:39:21 03:00:47:21",
+            ("003197", "", "V", edl_statement.EffectType.CUT, "00:31:45:01", "00:31:53:01", "03:00:39:21", "03:00:47:21"),
+        ),
+    ]
+)
+def test_line_variants(event, expected_fields):
+
+    statement_generator = edl_parser.statements_from_string(event)
+    parsed_statement = next(statement_generator)
+
+    assert isinstance(parsed_statement, edl_statement.StandardFormStatement)
+    statement: edl_statement.StandardFormStatement = parsed_statement
+
+
+    assert statement.edit_number == expected_fields[0]
+    assert statement.source_identification == expected_fields[1]
+    assert statement.channels == expected_fields[2]
+    assert statement.effect.type == expected_fields[3]
+    assert statement.source_entry == expected_fields[4]
+    assert statement.source_exit == expected_fields[5]
+    assert statement.sync_entry == expected_fields[6]
+    assert statement.sync_exit == expected_fields[7]
+
+
 def test_freezeframe():
     event = """000183  Z682_156 V     C        01:00:10:21 01:00:10:22 01:08:30:00 01:08:30:17 
 M2   Z682_156       000.0                01:00:10:21 

@@ -19,7 +19,9 @@ EDIT_NUMBER_RE = re.compile(
     r"^(?P<edit_number_subfield>\d+[a-zA-Z]?)"
     r"(?P<virtual_edit_indicator>>)?(?P<recorded_indicator>>!)?" + SEPARATOR_RE_STRING
 )  # This is built to handle SMPTE 258M EDIT_NUMBERs, CMX is more constrained.
+CHANNEL_NAME_RE = re.compile(r"A\d*\\/V|A\d*|AA|AA\\/V|A|B|V")
 COMMENT_RE = re.compile(r"^\*\s*(?P<data>.*)")
+WIPE_RE = re.compile(r"W\d{3}")
 
 VALID_EFFECT_TYPES = {et.value for et in EffectType}
 
@@ -35,6 +37,10 @@ HANDLED_DIRECTIVES = set(
         NoteFormStatement.NoteFormIdentifiers.SPLIT,
     ]
 )
+
+
+def _is_effect_type(field: str) -> bool:
+    return field in VALID_EFFECT_TYPES or WIPE_RE.fullmatch(field) is not None
 
 
 def statements_from_string(
@@ -119,17 +125,21 @@ def statements_from_lines(
                 event_number=edit_number,
             )
 
-        # consume the fields from the head of the line
+        # consume the fields from the head of the line to get
+        # source identification, channels, and edit type
         consuming_fields = fields[:]
-        source_identification = consuming_fields[0]
-        channels = consuming_fields[1]
-        edit_type = consuming_fields[2]
-        for i in range(3):
-            if i == 0:
-                source_identification = consuming_fields.pop(0)
-            elif i == 1:
-                channels_candidate = consuming_fields[0]
-                if channels_candidate in VALID_EFFECT_TYPES:
+        source_identification = consuming_fields.pop(0)
+        channels = None
+        edit_type = None
+
+        while consuming_fields:
+            field = consuming_fields.pop(0)
+            is_valid_channel = CHANNEL_NAME_RE.fullmatch(field) is not None
+            if channels is None and not is_valid_channel:
+                # This is likely a reel name with a space in it
+                source_identification += f" {field}"
+            elif _is_effect_type(field):
+                if channels is None:
                     # This indicates the channel assignment has no whitespace
                     # delimiter between the reel name and it (this can happen in
                     # cases with maxing out fixed column width reel names
@@ -148,11 +158,18 @@ def statements_from_lines(
                     # mushed into the end of the reel
                     channels = source_identification[reel_width:]
                     source_identification = source_identification[:reel_width]
-                else:
-                    channels = channels_candidate
-                    consuming_fields.pop(0)
-            elif i == 2:
-                edit_type = consuming_fields.pop(0)
+
+                edit_type = field
+            elif is_valid_channel:
+                channels = field
+            elif field == "":
+                if channels is None:
+                    channels = field
+                elif edit_type is None:
+                    edit_type = field
+
+            if channels is not None and edit_type is not None:
+                break
 
         if (len(fields) < 6 or len(fields) > 8) and not allow_best_effort_parsing:
             raise EDLParseError(

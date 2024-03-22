@@ -12,15 +12,15 @@
 # TODO: currently tracks with linked audio/video will lose their linkage when
 #       read into OTIO.
 
+import collections
 import copy
 import os
 import re
-import collections
 
 from opentimelineio import (
     exceptions,
-    schema,
     opentime,
+    schema,
 )
 
 from .exceptions import EDLParseError

@@ -1,6 +1,6 @@
-from opentimelineio import exceptions
-
 from typing import Optional
+
+from opentimelineio import exceptions
 
 
 class EDLParseError(exceptions.OTIOError):
