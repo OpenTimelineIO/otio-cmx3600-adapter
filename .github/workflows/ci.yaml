@@ -25,11 +25,13 @@ jobs:
         # TODO Once we have landed extracted adapters we replace otio-version
         #otio-version: ["0.15.0", "main"]
 
-        # We exclude this combination as it's not supported on all
-        # platforms at the time of this commit
+        # python 3.11 is not supported by otio 0.15.0
+        # macos arm64 does not have python 3.7
         exclude:
           - python-version: "3.11"
             otio-version: "0.15.0"
+          - os: "macos-14"
+            python-version: "3.7"
 
     runs-on: ${{ matrix.os }}
 
