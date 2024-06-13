@@ -21,7 +21,7 @@ jobs:
       matrix:
         python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
         os: [ubuntu-latest, macos-latest, windows-latest]
-        otio-version: ["0.17.0]
+        otio-version: ["0.17.0"]
         # TODO Once we have landed extracted adapters we replace otio-version
         #otio-version: ["0.15.0", "main"]
 
