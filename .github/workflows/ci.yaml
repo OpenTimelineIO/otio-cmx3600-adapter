@@ -21,7 +21,7 @@ jobs:
       matrix:
         python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
         os: [ubuntu-latest, macos-latest, windows-latest]
-        otio-version: ["0.17.0.dev1"]
+        otio-version: ["0.17.0]
         # TODO Once we have landed extracted adapters we replace otio-version
         #otio-version: ["0.15.0", "main"]
 
@@ -47,7 +47,7 @@ jobs:
           if [[ "${{ matrix.otio-version }}" == "main" ]]; then
             pip install "git+https://github.com/AcademySoftwareFoundation/OpenTimelineIO.git"
           else
-            pip install -V OpenTimelineIO==${{ matrix.otio-version }}
+            pip install OpenTimelineIO>=${{ matrix.otio-version }} --pre --only-binary :all:
           fi
           pip install flake8 pytest pytest-cov
         shell: bash
