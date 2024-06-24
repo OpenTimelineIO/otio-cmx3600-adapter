@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "otio-cmx3600-adapter"
-version = "1.0.0"
+version = "1.1.0"
 description = "OpenTimelineIO CMX 3600 EDL Adapter"
 authors = [
   { name="Contributors to the OpenTimelineIO project", email="otio-discussion@lists.aswf.io" },
