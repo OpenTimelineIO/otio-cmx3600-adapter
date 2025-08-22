@@ -29,7 +29,7 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -39,7 +39,7 @@ jobs:
           if [[ "${{ matrix.otio-version }}" == "main" ]]; then
             pip install "git+https://github.com/AcademySoftwareFoundation/OpenTimelineIO.git"
           else
-            pip install -V OpenTimelineIO==${{ matrix.otio-version }}
+            pip install OpenTimelineIO>=${{ matrix.otio-version }} --only-binary :all:
           fi
           pip install flake8 pytest pytest-cov
         shell: bash
