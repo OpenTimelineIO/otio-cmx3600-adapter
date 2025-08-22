@@ -4,7 +4,6 @@
 # python
 import os
 
-import pytest
 import opentimelineio as otio
 
 __doc__ = """Test CDL support in the EDL adapter."""
@@ -13,26 +12,29 @@ SAMPLE_DATA_DIR = os.path.join(os.path.dirname(__file__), "sample_data")
 CDL_EXAMPLE_PATH = os.path.join(SAMPLE_DATA_DIR, "cdl.edl")
 
 
-def test_cdl_read(cmx_adapter):
+def test_cdl_read():
     edl_path = CDL_EXAMPLE_PATH
-    timeline = cmx_adapter.read_from_file(edl_path)
+    timeline = otio.adapters.read_from_file(edl_path)
     assert timeline is not None
     assert len(timeline.tracks) == 1
     assert len(timeline.tracks[0]) == 2
     for clip in timeline.tracks[0]:
         # clip = timeline.tracks[0][0]
-        assert clip.name == "ZZ100_501 (LAY3)"
-        assert clip.source_range.duration == otio.opentime.from_timecode(
-            "00:00:01:07", 24
-        )
+        assert clip.name == \
+            "ZZ100_501 (LAY3)"
+        assert clip.source_range.duration == \
+            otio.opentime.from_timecode("00:00:01:07", 24)
         cdl = clip.metadata.get("cdl", {})
-        assert cdl.get("asc_sat") == 0.9
-        assert list(cdl.get("asc_sop").get("slope")) == [0.1, 0.2, 0.3]
-        assert list(cdl.get("asc_sop").get("offset")) == [1.0000, -0.0122, 0.0305]
-        assert list(cdl.get("asc_sop").get("power")) == [1.0000, 0.0000, 1.0000]
+        assert cdl.get("asc_sat") == \
+            0.9
+        assert list(cdl.get("asc_sop").get("slope")) == \
+            [0.1, 0.2, 0.3]
+        assert list(cdl.get("asc_sop").get("offset")) == \
+            [1.0000, -0.0122, 0.0305]
+        assert list(cdl.get("asc_sop").get("power")) == \
+            [1.0000, 0.0000, 1.0000]
 
-
-def test_cdl_read_with_commas(cmx_adapter):
+def test_cdl_read_with_commas():
     # This EDL was generated with Premiere Pro using the CDL master effect
     # on a clip
     cdl = """TITLE: Sequence 01
@@ -43,7 +45,7 @@ FCM: NON-DROP FRAME
 * ASC_SOP: (1.1549, 1.1469, 1.1422000000000001)(-0.067799999999999999, -0.055500000000000001, -0.032300000000000002)(1.1325000000000001, 1.1351, 1.1221000000000001)
 * ASC_SAT: 1.2988
 """  # noqa: E501
-    timeline = cmx_adapter.read_from_string(cdl)
+    timeline = otio.adapters.read_from_string(cdl, "cmx_3600")
 
     clip = timeline.tracks[0][0]
     cdl_metadata = clip.metadata["cdl"]
@@ -66,14 +68,15 @@ FCM: NON-DROP FRAME
         ],
     }
 
-    assert cdl_metadata["asc_sat"] == pytest.approx(1.2988)
+    assert round(abs(cdl_metadata["asc_sat"]-1.2988), 7) == 0
     for function in ("slope", "offset", "power"):
-        comparisons = zip(cdl_metadata["asc_sop"][function], ref_sop_values[function])
+        comparisons = zip(
+            cdl_metadata["asc_sop"][function], ref_sop_values[function]
+        )
         for value_comp, ref_comp in comparisons:
-            assert value_comp == pytest.approx(ref_comp), f"mismatch in {function}"
+            assert round(abs(value_comp-ref_comp), 7) == 0, f"mismatch in {function}"
 
-
-def test_cdl_round_trip(cmx_adapter):
+def test_cdl_round_trip():
     original = """TITLE: Example_Screening.01
 
 001  AX       V     C        01:00:04:05 01:00:05:12 00:00:00:00 00:00:01:07
@@ -91,6 +94,6 @@ def test_cdl_round_trip(cmx_adapter):
 *ASC_SAT 0.9
 * SOURCE FILE: ZZ100_501.LAY3.01
 """
-    timeline = cmx_adapter.read_from_string(original)
-    output = cmx_adapter.write_to_string(timeline)
+    timeline = otio.adapters.read_from_string(original, "cmx_3600")
+    output = otio.adapters.write_to_string(timeline, "cmx_3600")
     assert expected == output
