@@ -9,7 +9,6 @@ def test_cmx_dissolve_case_1():
     001  002                B     D    030 03:00:00:00 03:00:10:00 01:00:00:00  01:00:10:00
     """
     tl = cmx_3600_reader.read_from_string(transition_events, rate=30)
-    otio.adapters.write_to_file(tl, "/tmp/dissolve_1.otio")
 
     track = tl.tracks[0]
     first_clip = track[0]
@@ -42,7 +41,6 @@ def test_cmx_dissolve_case_2():
     002  002                B     D    030 03:00:00:00 03:00:10:00 01:00:00:00  01:00:10:00
     """
     tl = cmx_3600_reader.read_from_string(transition_events, rate=30)
-    otio.adapters.write_to_file(tl, "/tmp/dissolve_2.otio")
 
     track = tl.tracks[0]
     first_clip = track[0]
@@ -77,7 +75,6 @@ def test_cmx_wipe_case_3():
     003  002                B     W019 030 03:00:00:00 03:00:01:00 01:00:09:00  01:00:10:00
     """
     tl = cmx_3600_reader.read_from_string(transition_events, rate=30)
-    otio.adapters.write_to_file(tl, "/tmp/dissolve_3.otio")
 
     track = tl.tracks[0]
     first_clip = track[0]
@@ -112,7 +109,6 @@ def test_cmx_dissolve_case_4():
     004  002                B     D    030 03:00:00:00 03:00:02:00 01:00:08:00  01:00:10:00
     """
     tl = cmx_3600_reader.read_from_string(transition_events, rate=30)
-    otio.adapters.write_to_file(tl, "/tmp/dissolve_4.otio")
 
     track = tl.tracks[0]
     first_clip = track[0]
@@ -145,7 +141,6 @@ def test_cmx_dissolve_case_5():
     006  002                B     D    255 03:00:00:00 03:00:08:15 01:00:00:00  01:00:08:15
     """
     tl = cmx_3600_reader.read_from_string(transition_events, rate=30)
-    otio.adapters.write_to_file(tl, "/tmp/dissolve_7.otio")
 
     track = tl.tracks[0]
     first_clip = track[0]
