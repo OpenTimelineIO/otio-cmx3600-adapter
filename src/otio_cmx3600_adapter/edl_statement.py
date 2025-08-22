@@ -124,12 +124,14 @@ class MotionDirective:
     # currently use them all, but they're here for completeness.
     MOTION_RE = re.compile(
         r"^(?P<reel>.*?)\s+(?P<speed>-?[0-9\.]+)\s*(?P<reference>\S*?)\s*"
-        r"(?P<timing_relationship>\S*?)\s*(?P<trigger_sign>[+-]?)(?P<trigger>[0-9:]{11})$"
+        r"(?P<timing_relationship>\S*?)\s*(?P<trigger_sign>[+-]?)(?P<trigger>[0-9:]{10,11})$"
     )
 
     @classmethod
     def from_string(cls, motion_directive: str):
         match = cls.MOTION_RE.match(motion_directive)
+        if match is None:
+            raise EDLParseError(f"Unsupported M2 Effect format: '{motion_directive}'")
         reel = match.group("reel").strip()
         speed = match.group("speed")
         trigger = match.group("trigger")
