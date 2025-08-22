@@ -7,18 +7,11 @@
 
 # python
 import os
-import tempfile
-from tempfile import TemporaryDirectory  # noqa: F401
+from pathlib import Path
 
 import pytest
 import opentimelineio as otio
 
-
-# We import the cmx_3600 module this way to make sure the EDLParseError defined
-# in the module is properly caught. Importing the module and error directly
-# doesn't get accepted as the same exception when asserting in the
-# `test_invalid_record_timecode` below.
-cmx_3600 = otio.adapters.from_name("cmx_3600").module()
 
 # List of sample files used in tests
 SAMPLE_DATA_DIR = os.path.join(os.path.dirname(__file__), "sample_data")
@@ -41,11 +34,13 @@ MULTIPLE_TARGET_AUDIO_PATH = os.path.join(SAMPLE_DATA_DIR, "multi_audio.edl")
 TRANSITION_DURATION_TEST = os.path.join(SAMPLE_DATA_DIR, "transition_duration.edl")
 ENABLED_TEST = os.path.join(SAMPLE_DATA_DIR, "enabled.otio")
 
+DISSOLVE_TESTS = [DISSOLVE_TEST, DISSOLVE_TEST_2, DISSOLVE_TEST_3, DISSOLVE_TEST_4]
 
-def test_edl_read():
+
+def test_edl_read(cmx_adapter):
     edl_path = SCREENING_EXAMPLE_PATH
     fps = 24
-    timeline = otio.adapters.read_from_file(edl_path)
+    timeline = cmx_adapter.read_from_file(edl_path)
     assert timeline is not None
     assert len(timeline.tracks) == 1
     assert len(timeline.tracks[0]) == 9
@@ -100,7 +95,7 @@ def test_edl_read():
     )
 
 
-def test_reelname_length():
+def test_reelname_length(cmx_adapter):
     track = otio.schema.Track()
     tl = otio.schema.Timeline("test_timeline", tracks=[track])
     rt = otio.opentime.RationalTime(5.0, 24.0)
@@ -123,7 +118,7 @@ def test_reelname_length():
     track.append(cl)
 
     # Test default behavior
-    result = otio.adapters.write_to_string(tl, adapter_name="cmx_3600")
+    result = cmx_adapter.write_to_string(tl)
 
     expected = """TITLE: test_timeline
 
@@ -136,9 +131,7 @@ def test_reelname_length():
     assert result == expected
 
     # Keep full filename (minus extension) as reelname
-    result = otio.adapters.write_to_string(
-        tl, adapter_name="cmx_3600", reelname_len=None
-    )
+    result = cmx_adapter.write_to_string(tl, reelname_len=None)
     expected = """TITLE: test_timeline
 
 001  test_a_really_really_long_filename \
@@ -150,7 +143,7 @@ V     C        00:00:00:00 00:00:00:05 00:00:00:00 00:00:00:05
     assert result == expected
 
     # Make sure reel name is only 12 characters long
-    result = otio.adapters.write_to_string(tl, adapter_name="cmx_3600", reelname_len=12)
+    result = cmx_adapter.write_to_string(tl, reelname_len=12)
     expected = """TITLE: test_timeline
 
 001  testareallyr V     C        00:00:00:00 00:00:00:05 00:00:00:00 00:00:00:05
@@ -162,7 +155,7 @@ V     C        00:00:00:00 00:00:00:05 00:00:00:00 00:00:00:05
     assert result == expected
 
 
-def test_edl_round_trip_mem2disk2mem(assertJsonEqual):
+def test_edl_round_trip_mem2disk2mem(cmx_adapter, assertJsonEqual):
     track = otio.schema.Track()
     tl = otio.schema.Timeline("test_timeline", tracks=[track])
     tl.global_start_time = otio.opentime.from_timecode("01:00:00:00", 24)
@@ -206,8 +199,8 @@ def test_edl_round_trip_mem2disk2mem(assertJsonEqual):
     track.append(cl4)
     track.append(cl5)
 
-    result = otio.adapters.write_to_string(tl, adapter_name="cmx_3600")
-    new_otio = otio.adapters.read_from_string(result, adapter_name="cmx_3600")
+    result = cmx_adapter.write_to_string(tl)
+    new_otio = cmx_adapter.read_from_string(result)
 
     # Cull out the metadata fields that are read-only
     del new_otio.metadata["cmx_3600"]
@@ -231,93 +224,95 @@ def test_edl_round_trip_mem2disk2mem(assertJsonEqual):
     # ensure that an error is raised if more than one effect is present
     cl5.effects.append(otio.schema.FreezeFrame())
     with pytest.raises(otio.exceptions.NotSupportedError):
-        otio.adapters.write_to_string(tl, "cmx_3600")
+        cmx_adapter.write_to_string(tl)
 
     # blank effect should pass through and be ignored
     cl5.effects[:] = [otio.schema.Effect()]
-    otio.adapters.write_to_string(tl, "cmx_3600")
+    cmx_adapter.write_to_string(tl)
 
     # but a timing effect should raise an exception
     cl5.effects[:] = [otio.schema.TimeEffect()]
     with pytest.raises(otio.exceptions.NotSupportedError):
-        otio.adapters.write_to_string(tl, "cmx_3600")
+        cmx_adapter.write_to_string(tl)
 
 
-def test_edl_round_trip_disk2mem2disk_speed_effects(assertJsonEqual):
+def test_edl_round_trip_disk2mem2disk_speed_effects(
+    cmx_adapter, assertJsonEqual, tmp_path: Path
+):
     test_edl = SPEED_EFFECTS_TEST_SMALL
-    timeline = otio.adapters.read_from_file(test_edl)
+    timeline = cmx_adapter.read_from_file(test_edl)
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        tmp_path = os.path.join(
-            temp_dir, "test_edl_round_trip_disk2mem2disk_speed_effects.edl"
-        )
+    tmp_path = os.path.join(
+        tmp_path, "test_edl_round_trip_disk2mem2disk_speed_effects.edl"
+    )
 
-        otio.adapters.write_to_file(timeline, tmp_path)
+    cmx_adapter.write_to_file(timeline, tmp_path)
 
-        result = otio.adapters.read_from_file(tmp_path)
+    result = cmx_adapter.read_from_file(tmp_path)
 
-        # Due to how M2 speed factors may not match the timecode values
-        # (they can be off by one), we special case check that clip and then
-        # snap the metadata value back to what it originally was
-        # We could consider overriding the value in the M2 speed with what
-        # the TC says, but it's probably best to stay true to what the EDL
-        # was signalling, who knows what TC rounding methods are used.
-        cmx_metadata = result.tracks[0][-1].metadata["cmx_3600"]
-        assert cmx_metadata["original_timecode"]["source_tc_out"] == "01:00:08:23"
-        cmx_metadata["original_timecode"]["source_tc_out"] = "01:00:08:22"
+    # Due to how M2 speed factors may not match the timecode values
+    # (they can be off by one), we special case check that clip and then
+    # snap the metadata value back to what it originally was
+    # We could consider overriding the value in the M2 speed with what
+    # the TC says, but it's probably best to stay true to what the EDL
+    # was signalling, who knows what TC rounding methods are used.
+    cmx_metadata = result.tracks[0][-1].metadata["cmx_3600"]
+    assert cmx_metadata["original_timecode"]["source_tc_out"] == "01:00:08:23"
+    cmx_metadata["original_timecode"]["source_tc_out"] = "01:00:08:22"
 
-        # When debugging, you can use this to see the difference in the OTIO
-        # otio.adapters.otio_json.write_to_file(timeline, "/tmp/original.otio")
-        # otio.adapters.otio_json.write_to_file(result, "/tmp/output.otio")
-        # os.system("xxdiff /tmp/{original,output}.otio")
+    # When debugging, you can use this to see the difference in the OTIO
+    # otio.adapters.otio_json.write_to_file(timeline, "/tmp/original.otio")
+    # otio.adapters.otio_json.write_to_file(result, "/tmp/output.otio")
+    # os.system("xxdiff /tmp/{original,output}.otio")
 
-        # When debugging, use this to see the difference in the EDLs on disk
-        # os.system("xxdiff {} {}&".format(test_edl, tmp_path))
+    # When debugging, use this to see the difference in the EDLs on disk
+    # os.system("xxdiff {} {}&".format(test_edl, tmp_path))
 
-        # The in-memory OTIO representation should be the same
-        assertJsonEqual(timeline, result)
-
-
-def test_edl_round_trip_disk2mem2disk(assertIsOTIOEquivalentTo):
-    timeline = otio.adapters.read_from_file(SCREENING_EXAMPLE_PATH)
-
-    with tempfile.TemporaryDirectory() as temp_dir:
-        tmp_path = os.path.join(temp_dir, "test_edl_round_trip_disk2mem2disk.edl")
-
-        otio.adapters.write_to_file(timeline, tmp_path)
-
-        result = otio.adapters.read_from_file(tmp_path)
-
-        # When debugging, you can use this to see the difference in the OTIO
-        # otio.adapters.otio_json.write_to_file(timeline, "/tmp/original.otio")
-        # otio.adapters.otio_json.write_to_file(result, "/tmp/output.otio")
-        # os.system("opendiff /tmp/{original,output}.otio")
-
-        original_json = otio.adapters.otio_json.write_to_string(timeline)
-        output_json = otio.adapters.otio_json.write_to_string(result)
-        assert original_json == output_json
-
-        # The in-memory OTIO representation should be the same
-        assertIsOTIOEquivalentTo(timeline, result)
-
-        # When debugging, use this to see the difference in the EDLs on disk
-        # os.system("opendiff {} {}".format(SCREENING_EXAMPLE_PATH, tmp_path))
-
-        # But the EDL text on disk are *not* byte-for-byte identical
-        with open(SCREENING_EXAMPLE_PATH) as original_file:
-            with open(tmp_path) as output_file:
-                assert original_file.read() != output_file.read()
+    # The in-memory OTIO representation should be the same
+    assertJsonEqual(timeline, result)
 
 
-def test_regex_flexibility(assertIsOTIOEquivalentTo):
-    timeline = otio.adapters.read_from_file(SCREENING_EXAMPLE_PATH)
-    no_spaces = otio.adapters.read_from_file(NO_SPACES_PATH)
+def test_edl_round_trip_disk2mem2disk(
+    cmx_adapter, assertIsOTIOEquivalentTo, tmp_path: Path
+):
+    timeline = cmx_adapter.read_from_file(SCREENING_EXAMPLE_PATH)
+
+    tmp_path = os.path.join(tmp_path, "test_edl_round_trip_disk2mem2disk.edl")
+
+    cmx_adapter.write_to_file(timeline, tmp_path)
+
+    result = cmx_adapter.read_from_file(tmp_path)
+
+    # When debugging, you can use this to see the difference in the OTIO
+    # otio.adapters.otio_json.write_to_file(timeline, "/tmp/original.otio")
+    # otio.adapters.otio_json.write_to_file(result, "/tmp/output.otio")
+    # os.system("opendiff /tmp/{original,output}.otio")
+
+    original_json = otio.adapters.otio_json.write_to_string(timeline)
+    output_json = otio.adapters.otio_json.write_to_string(result)
+    assert original_json == output_json
+
+    # The in-memory OTIO representation should be the same
+    assertIsOTIOEquivalentTo(timeline, result)
+
+    # When debugging, use this to see the difference in the EDLs on disk
+    # os.system("opendiff {} {}".format(SCREENING_EXAMPLE_PATH, tmp_path))
+
+    # But the EDL text on disk are *not* byte-for-byte identical
+    with open(SCREENING_EXAMPLE_PATH) as original_file:
+        with open(tmp_path) as output_file:
+            assert original_file.read() != output_file.read()
+
+
+def test_regex_flexibility(cmx_adapter, assertIsOTIOEquivalentTo):
+    timeline = cmx_adapter.read_from_file(SCREENING_EXAMPLE_PATH)
+    no_spaces = cmx_adapter.read_from_file(NO_SPACES_PATH)
     assertIsOTIOEquivalentTo(timeline, no_spaces)
 
 
 def test_clip_with_tab_and_space_delimiters(cmx_adapter):
     timeline = cmx_adapter.read_from_string(
-        "001  Z10 V  C\t\t01:00:04:05 01:00:05:12 00:59:53:11 00:59:54:18",
+        "001  Z10 V  C\t\t01:00:04:05 01:00:05:12 00:59:53:11 00:59:54:18"
     )
     assert timeline is not None
     assert len(timeline.tracks) == 1
@@ -327,7 +322,7 @@ def test_clip_with_tab_and_space_delimiters(cmx_adapter):
     assert timeline.tracks[0][0].source_range.duration.value == 31
 
 
-def test_imagesequence_read():
+def test_imagesequence_read(cmx_adapter):
     trunced_edl1 = """TITLE: Image Sequence Write
 
 001  myimages V     C        01:00:01:00 01:00:02:12 00:00:00:00 00:00:01:12
@@ -336,7 +331,7 @@ def test_imagesequence_read():
 * OTIO TRUNCATED REEL NAME FROM: my_image_sequence.[1025-1060].ext
 """
     rate = 24
-    tl1 = otio.adapters.read_from_string(trunced_edl1, "cmx_3600", rate=rate)
+    tl1 = cmx_adapter.read_from_string(trunced_edl1, rate=rate)
     assert isinstance(tl1, otio.schema.Timeline)
 
     clip1 = tl1.tracks[0][0]
@@ -358,7 +353,7 @@ def test_imagesequence_read():
 * OTIO TRUNCATED REEL NAME FROM: my_image_file.1025.ext
 """
 
-    tl2 = otio.adapters.read_from_string(trunced_edl2, "cmx_3600", rate=rate)
+    tl2 = cmx_adapter.read_from_string(trunced_edl2, rate=rate)
     clip2 = tl2.tracks[0][0]
     media_ref2 = clip2.media_reference
     assert isinstance(media_ref2, otio.schema.ExternalReference)
@@ -370,13 +365,13 @@ def test_imagesequence_read():
 * FROM CLIP: /media/path/my_image_file.[1025].ext
 * OTIO TRUNCATED REEL NAME FROM: my_image_file.[1025].ext
 """
-    tl3 = otio.adapters.read_from_string(trunced_edl3, "cmx_3600", rate=rate)
+    tl3 = cmx_adapter.read_from_string(trunced_edl3, rate=rate)
     clip3 = tl3.tracks[0][0]
     media_ref3 = clip3.media_reference
     assert isinstance(media_ref3, otio.schema.ExternalReference)
 
 
-def test_imagesequence_write():
+def test_imagesequence_write(cmx_adapter):
     rate = 24
     tl = otio.schema.Timeline("Image Sequence Write")
     track = otio.schema.Track("V1")
@@ -404,7 +399,7 @@ def test_imagesequence_write():
     track.append(clip)
 
     # Default behavior
-    result1 = otio.adapters.write_to_string(tl, "cmx_3600", rate=rate)
+    result1 = cmx_adapter.write_to_string(tl, rate=rate)
 
     expected_result1 = """TITLE: Image Sequence Write
 
@@ -416,7 +411,7 @@ def test_imagesequence_write():
     assert result1 == expected_result1
 
     # Only trunc extension in reel name
-    result2 = otio.adapters.write_to_string(tl, "cmx_3600", rate=24, reelname_len=None)
+    result2 = cmx_adapter.write_to_string(tl, rate=24, reelname_len=None)
 
     expected_result2 = """TITLE: Image Sequence Write
 
@@ -428,8 +423,8 @@ def test_imagesequence_write():
     assert result2 == expected_result2
 
 
-def test_dissolve_parse():
-    tl = otio.adapters.read_from_file(DISSOLVE_TEST)
+def test_dissolve_parse(cmx_adapter):
+    tl = cmx_adapter.read_from_file(DISSOLVE_TEST)
     # clip/transition/clip/clip
     assert len(tl.tracks[0]) == 3
 
@@ -446,8 +441,8 @@ def test_dissolve_parse():
     assert tl.tracks[0][2].name == "clip_B"
 
 
-def test_dissolve_parse_middle():
-    tl = otio.adapters.read_from_file(DISSOLVE_TEST_2)
+def test_dissolve_parse_middle(cmx_adapter):
+    tl = cmx_adapter.read_from_file(DISSOLVE_TEST_2)
     trck = tl.tracks[0]
     # 2 clips and 1 transition
     assert len(trck) == 3
@@ -473,8 +468,8 @@ def test_dissolve_parse_middle():
     assert clip_b.visible_range().duration.value == 15
 
 
-def test_dissolve_parse_full_clip_dissolve():
-    tl = otio.adapters.read_from_file(DISSOLVE_TEST_3)
+def test_dissolve_parse_full_clip_dissolve(cmx_adapter):
+    tl = cmx_adapter.read_from_file(DISSOLVE_TEST_3)
     assert len(tl.tracks[0]) == 5
 
     assert isinstance(tl.tracks[0][2], otio.schema.Transition)
@@ -511,22 +506,21 @@ def test_dissolve_parse_full_clip_dissolve():
     assert clip_d.duration().value == 46
 
 
-def test_dissolve_with_odd_frame_count_maintains_length():
+def test_dissolve_with_odd_frame_count_maintains_length(cmx_adapter):
     # EXERCISE
-    tl = otio.adapters.read_from_string(
+    tl = cmx_adapter.read_from_string(
         "1 CLPA V C     00:00:04:17 00:00:07:02 00:00:00:00 00:00:02:09\n"
         "2 CLPA V C     00:00:07:02 00:00:07:02 00:00:02:09 00:00:02:09\n"
         "2 CLPB V D 027 00:00:06:18 00:00:07:21 00:00:02:09 00:00:03:12\n"
         "3 CLPB V C     00:00:07:21 00:00:15:21 00:00:03:12 00:00:11:12\n",
-        adapter_name="cmx_3600",
     )
 
     # VALIDATE
     assert tl.duration().value == (11 * 24) + 12
 
 
-def test_wipe_parse():
-    tl = otio.adapters.read_from_file(WIPE_TEST)
+def test_wipe_parse(cmx_adapter):
+    tl = cmx_adapter.read_from_file(WIPE_TEST)
     track = tl.tracks[0]
     assert len(track) == 3
 
@@ -544,13 +538,12 @@ def test_wipe_parse():
     assert clip_b.visible_range().duration.value == 10 + 1
 
 
-def test_fade_to_black():
+def test_fade_to_black(cmx_adapter):
     # EXERCISE
-    tl = otio.adapters.read_from_string(
+    tl = cmx_adapter.read_from_string(
         "1 CLPA V C     00:00:03:18 00:00:12:15 00:00:00:00 00:00:08:21\n"
         "2 CLPA V C     00:00:12:15 00:00:12:15 00:00:08:21 00:00:08:21\n"
         "2 BL   V D 024 00:00:00:00 00:00:01:00 00:00:08:21 00:00:09:21\n",
-        adapter_name="cmx_3600",
     )
 
     # VALIDATE
@@ -562,41 +555,37 @@ def test_fade_to_black():
     assert tl.tracks[0][2].source_range.start_time.value == 0
 
 
-def test_edl_round_trip_with_transitions():
-    with tempfile.TemporaryDirectory() as temp_dir:
-        # Notes:
-        # - the writer does not handle wipes, only dissolves
-        # - the writer can generate invalid EDLs if spaces are in reel names.
-        for edl_file in [
-            DISSOLVE_TEST,
-            DISSOLVE_TEST_2,
-            DISSOLVE_TEST_3,
-            DISSOLVE_TEST_4,
-        ]:
-            edl_name = os.path.basename(edl_file)
-            timeline = otio.adapters.read_from_file(edl_file)
-            tmp_path = os.path.join(temp_dir, f"test_edl_round_trip_{edl_name}")
-            otio.adapters.write_to_file(timeline, tmp_path)
+@pytest.mark.parametrize(
+    "edl_file", DISSOLVE_TESTS, ids=[os.path.basename(path) for path in DISSOLVE_TESTS]
+)
+def test_edl_round_trip_with_transitions(cmx_adapter, tmp_path: Path, edl_file):
+    # Notes:
+    # - the writer does not handle wipes, only dissolves
+    # - the writer can generate invalid EDLs if spaces are in reel names.
+    edl_name = os.path.basename(edl_file)
+    timeline = cmx_adapter.read_from_file(edl_file)
+    tmp_path = os.path.join(tmp_path, f"test_edl_round_trip_{edl_name}")
+    cmx_adapter.write_to_file(timeline, tmp_path)
 
-            result = otio.adapters.read_from_file(tmp_path)
-            assert len(timeline.tracks) == len(result.tracks)
-            for track, res_track in zip(timeline.tracks, result.tracks):
-                assert len(track) == len(res_track)
-                for child, res_child in zip(track, res_track):
-                    assert type(child) is type(res_child)
-                    if isinstance(child, otio.schema.Transition):
-                        assert child.in_offset == res_child.in_offset
-                        assert child.out_offset == res_child.out_offset
-                        assert child.transition_type == res_child.transition_type
-                    else:
-                        assert child.source_range == res_child.source_range
+    result = cmx_adapter.read_from_file(tmp_path)
+    assert len(timeline.tracks) == len(result.tracks)
+    for track, res_track in zip(timeline.tracks, result.tracks):
+        assert len(track) == len(res_track)
+        for child, res_child in zip(track, res_track):
+            assert type(child) is type(res_child)
+            if isinstance(child, otio.schema.Transition):
+                assert child.in_offset == res_child.in_offset
+                assert child.out_offset == res_child.out_offset
+                assert child.transition_type == res_child.transition_type
+            else:
+                assert child.source_range == res_child.source_range
 
 
-def test_edl_25fps():
+def test_edl_25fps(cmx_adapter):
     # EXERCISE
     edl_path = EXEMPLE_25_FPS_PATH
     fps = 25
-    timeline = otio.adapters.read_from_file(edl_path, rate=fps)
+    timeline = cmx_adapter.read_from_file(edl_path, rate=fps)
     track = timeline.tracks[0]
     assert track[0].source_range.duration.value == 161
     assert track[1].source_range.duration.value == 200
@@ -604,9 +593,9 @@ def test_edl_25fps():
     assert track[3].source_range.duration.value == 49
 
 
-def test_record_gaps():
+def test_record_gaps(cmx_adapter):
     edl_path = GAP_TEST
-    timeline = otio.adapters.read_from_file(edl_path)
+    timeline = cmx_adapter.read_from_file(edl_path)
     track = timeline.tracks[0]
     assert len(track) == 5
     assert track.duration().value == 5 * 24 + 6
@@ -638,13 +627,12 @@ def test_record_gaps():
     ]
 
 
-def test_read_generators():
+def test_read_generators(cmx_adapter):
     # EXERCISE
-    tl = otio.adapters.read_from_string(
+    tl = cmx_adapter.read_from_string(
         "1 BL V C 00:00:00:00 00:00:01:00 00:00:00:00 00:00:01:00\n"
         "2 BLACK V C 00:00:00:00 00:00:01:00 00:00:01:00 00:00:02:00\n"
         "3 BARS V C 00:00:00:00 00:00:01:00 00:00:02:00 00:00:03:00\n",
-        adapter_name="cmx_3600",
     )
 
     # VALIDATE
@@ -653,11 +641,11 @@ def test_read_generators():
     assert tl.tracks[0][2].media_reference.generator_kind == "SMPTEBars"
 
 
-def test_style_edl_read(assertIsOTIOEquivalentTo):
+def test_style_edl_read(cmx_adapter, assertIsOTIOEquivalentTo):
     edl_paths = [AVID_EXAMPLE_PATH, NUCODA_EXAMPLE_PATH, PREMIERE_EXAMPLE_PATH]
     for edl_path in edl_paths:
         fps = 24
-        timeline = otio.adapters.read_from_file(edl_path)
+        timeline = cmx_adapter.read_from_file(edl_path)
         assert timeline is not None
         assert len(timeline.tracks) == 1
         assert len(timeline.tracks[0]) == 2
@@ -706,7 +694,7 @@ def test_style_edl_read(assertIsOTIOEquivalentTo):
             )
 
 
-def test_style_edl_write():
+def test_style_edl_write(cmx_adapter):
     track = otio.schema.Track()
     tl = otio.schema.Timeline("temp", tracks=[track])
     rt = otio.opentime.RationalTime(5.0, 24.0)
@@ -737,7 +725,7 @@ def test_style_edl_write():
     tl.tracks[0].append(cl2)
 
     tl.name = "test_nucoda_timeline"
-    result = otio.adapters.write_to_string(tl, adapter_name="cmx_3600", style="nucoda")
+    result = cmx_adapter.write_to_string(tl, style="nucoda")
 
     expected = r"""TITLE: test_nucoda_timeline
 
@@ -754,7 +742,7 @@ def test_style_edl_write():
     assert result == expected
 
     tl.name = "test_avid_timeline"
-    result = otio.adapters.write_to_string(tl, adapter_name="cmx_3600", style="avid")
+    result = cmx_adapter.write_to_string(tl, style="avid")
 
     expected = r"""TITLE: test_avid_timeline
 
@@ -771,9 +759,7 @@ def test_style_edl_write():
     assert result == expected
 
     tl.name = "test_premiere_timeline"
-    result = otio.adapters.write_to_string(
-        tl, adapter_name="cmx_3600", style="premiere"
-    )
+    result = cmx_adapter.write_to_string(tl, style="premiere")
 
     expected = r"""TITLE: test_premiere_timeline
 
@@ -790,7 +776,7 @@ def test_style_edl_write():
     assert result == expected
 
 
-def test_reels_edl_round_trip_string2mem2string():
+def test_reels_edl_round_trip_string2mem2string(cmx_adapter):
     sample_data = r"""TITLE: Reels_Example.01
 
 001  ZZ100_50 V     C        01:00:04:05 01:00:05:12 00:59:53:11 00:59:54:18
@@ -801,14 +787,12 @@ def test_reels_edl_round_trip_string2mem2string():
 * FROM FILE: S:/path/to/ZZ100_502A.take_2.0101.exr
 """
 
-    timeline = otio.adapters.read_from_string(sample_data, adapter_name="cmx_3600")
-    otio_data = otio.adapters.write_to_string(
-        timeline, adapter_name="cmx_3600", style="nucoda"
-    )
+    timeline = cmx_adapter.read_from_string(sample_data)
+    otio_data = cmx_adapter.write_to_string(timeline, style="nucoda")
     assert sample_data == otio_data
 
 
-def test_nucoda_edl_write_with_transition():
+def test_nucoda_edl_write_with_transition(cmx_adapter):
     track = otio.schema.Track()
     tl = otio.schema.Timeline("Example CrossDissolve", tracks=[track])
 
@@ -851,7 +835,7 @@ def test_nucoda_edl_write_with_transition():
     )
     tl.tracks[0].extend([cl, trans, cl2, cl3])
 
-    result = otio.adapters.write_to_string(tl, adapter_name="cmx_3600", style="nucoda")
+    result = cmx_adapter.write_to_string(tl, style="nucoda")
 
     expected = r"""TITLE: Example CrossDissolve
 
@@ -872,7 +856,7 @@ def test_nucoda_edl_write_with_transition():
     assert result == expected
 
 
-def test_nucoda_edl_write_fade_in():
+def test_nucoda_edl_write_fade_in(cmx_adapter):
     track = otio.schema.Track()
     tl = otio.schema.Timeline("Example Fade In", tracks=[track])
 
@@ -893,7 +877,7 @@ def test_nucoda_edl_write_fade_in():
     )
     tl.tracks[0].extend([trans, cl])
 
-    result = otio.adapters.write_to_string(tl, adapter_name="cmx_3600", style="nucoda")
+    result = cmx_adapter.write_to_string(tl, style="nucoda")
 
     expected = r"""TITLE: Example Fade In
 
@@ -906,7 +890,7 @@ def test_nucoda_edl_write_fade_in():
     assert result == expected
 
 
-def test_nucoda_edl_write_fade_out():
+def test_nucoda_edl_write_fade_out(cmx_adapter):
     track = otio.schema.Track()
     tl = otio.schema.Timeline("Example Fade Out", tracks=[track])
 
@@ -927,7 +911,7 @@ def test_nucoda_edl_write_fade_out():
     )
     tl.tracks[0].extend([cl, trans])
 
-    result = otio.adapters.write_to_string(tl, adapter_name="cmx_3600", style="nucoda")
+    result = cmx_adapter.write_to_string(tl, style="nucoda")
 
     expected = r"""TITLE: Example Fade Out
 
@@ -943,7 +927,7 @@ def test_nucoda_edl_write_fade_out():
     assert result == expected
 
 
-def test_nucoda_edl_write_with_double_transition():
+def test_nucoda_edl_write_with_double_transition(cmx_adapter):
     track = otio.schema.Track()
     tl = otio.schema.Timeline("Double Transition", tracks=[track])
 
@@ -978,7 +962,7 @@ def test_nucoda_edl_write_with_double_transition():
     )
     tl.tracks[0].extend([cl, trans, cl2, trans2, cl3])
 
-    result = otio.adapters.write_to_string(tl, adapter_name="cmx_3600", style="nucoda")
+    result = cmx_adapter.write_to_string(tl, style="nucoda")
 
     expected = """TITLE: Double Transition
 
@@ -992,8 +976,8 @@ def test_nucoda_edl_write_with_double_transition():
     assert result == expected
 
 
-def test_read_edl_with_multiple_target_audio_tracks():
-    tl = otio.adapters.read_from_file(MULTIPLE_TARGET_AUDIO_PATH)
+def test_read_edl_with_multiple_target_audio_tracks(cmx_adapter):
+    tl = cmx_adapter.read_from_file(MULTIPLE_TARGET_AUDIO_PATH)
 
     assert len(tl.audio_tracks()) == 2
 
@@ -1011,7 +995,7 @@ def test_read_edl_with_multiple_target_audio_tracks():
     assert second_track[0].source_range == expected_range
 
 
-def test_custom_reel_names():
+def test_custom_reel_names(cmx_adapter):
     track = otio.schema.Track()
     tl = otio.schema.Timeline(tracks=[track])
     tr = otio.opentime.TimeRange(
@@ -1022,7 +1006,7 @@ def test_custom_reel_names():
     cl.metadata["cmx_3600"] = {"reel": "v330_21f"}
     tl.tracks[0].append(cl)
 
-    result = otio.adapters.write_to_string(tl, adapter_name="cmx_3600", style="nucoda")
+    result = cmx_adapter.write_to_string(tl, style="nucoda")
 
     assert (
         result == "001  v330_21f V     C        "
@@ -1030,23 +1014,22 @@ def test_custom_reel_names():
     )
 
 
-def test_invalid_edl_style_raises_exception():
-    tl = otio.adapters.read_from_string(
+def test_invalid_edl_style_raises_exception(cmx_adapter):
+    tl = cmx_adapter.read_from_string(
         "001  AX       V     C        "
         "00:00:00:00 00:00:00:05 00:00:00:00 00:00:00:05\n",
-        adapter_name="cmx_3600",
     )
     with pytest.raises(otio.exceptions.NotSupportedError):
-        otio.adapters.write_to_string(tl, adapter_name="cmx_3600", style="bogus")
+        cmx_adapter.write_to_string(tl, style="bogus")
 
 
-def test_invalid_record_timecode():
+def test_invalid_record_timecode(cmx_adapter):
     # There are timecodes beyond the 23 frame limit in this EDL that cause a
     # ValueError when parsed at 24fps.
     with pytest.raises(ValueError):
-        otio.adapters.read_from_file(TIMECODE_MISMATCH_TEST)
+        cmx_adapter.read_from_file(TIMECODE_MISMATCH_TEST)
 
-    tl = otio.adapters.read_from_file(TIMECODE_MISMATCH_TEST, rate=25)
+    tl = cmx_adapter.read_from_file(TIMECODE_MISMATCH_TEST, rate=25)
     expected_duration = otio.opentime.from_timecode(
         "00:00:19:19", 25
     ) - otio.opentime.from_timecode("00:00:17:22", 25)
@@ -1056,14 +1039,13 @@ def test_invalid_record_timecode():
     )
 
 
-def test_can_read_frame_cut_points():
+def test_can_read_frame_cut_points(cmx_adapter):
     # EXERCISE
-    tl = otio.adapters.read_from_string(
+    tl = cmx_adapter.read_from_string(
         "1 CLPA V C     113 170 0 57\n"
         "2 CLPA V C     170 170 57 57\n"
         "2 CLPB V D 027 162 189 57 84\n"
         "3 CLPB V C     189 381 84 276\n",
-        adapter_name="cmx_3600",
     )
 
     # VALIDATE
@@ -1085,8 +1067,8 @@ def test_can_read_frame_cut_points():
     assert clip_b.duration().value == 27 + (381 - 189)
 
 
-def test_speed_effects():
-    tl = otio.adapters.read_from_file(SPEED_EFFECTS_TEST)
+def test_speed_effects(cmx_adapter):
+    tl = cmx_adapter.read_from_file(SPEED_EFFECTS_TEST)
     assert tl.duration() == otio.opentime.from_timecode("00:21:03:18", 24)
 
     # Look for a clip with a freeze frame effect
@@ -1109,7 +1091,9 @@ def test_speed_effects():
     clip = tl.tracks[0][281]
     assert clip.name == "Z686_5A (LAY2) (47.56 FPS)"
     assert clip.effects and clip.effects[0].effect_name == "LinearTimeWarp"
-    assert round(abs(clip.effects[0].time_scalar - 1.98333333), 7) == 0
+    assert abs(clip.effects[0].time_scalar - 1.98333333) == pytest.approx(
+        0, abs=0.0000001
+    )
 
     assert clip.metadata.get("cmx_3600", {}).get("motion") is None
     assert clip.duration() == otio.opentime.from_timecode("00:00:01:12", 24)
@@ -1124,8 +1108,8 @@ def test_speed_effects():
     )
 
 
-def test_transition_duration():
-    tl = otio.adapters.read_from_file(TRANSITION_DURATION_TEST)
+def test_transition_duration(cmx_adapter):
+    tl = cmx_adapter.read_from_file(TRANSITION_DURATION_TEST)
     assert len(tl.tracks[0]) == 5
 
     assert isinstance(tl.tracks[0][2], otio.schema.Transition)
@@ -1133,11 +1117,11 @@ def test_transition_duration():
     assert tl.tracks[0][2].duration().value == 26.0
 
 
-def test_three_part_transition():
+def test_three_part_transition(cmx_adapter):
     """
     Test A->B->C Transition
     """
-    tl = otio.adapters.read_from_file(DISSOLVE_TEST_4)
+    tl = cmx_adapter.read_from_file(DISSOLVE_TEST_4)
     assert len(tl.tracks[0]) == 10
 
     track = tl.tracks[0]
@@ -1177,16 +1161,16 @@ def test_three_part_transition():
     assert track[9].duration().value == 135.0
 
 
-def test_enabled():
+def test_enabled(cmx_adapter):
     tl = otio.adapters.read_from_file(ENABLED_TEST)
     # Exception is raised because the OTIO file has two tracks and cmx_3600 only
     # supports one
     with pytest.raises(otio.exceptions.NotSupportedError):
-        otio.adapters.write_to_string(tl, adapter_name="cmx_3600")
+        cmx_adapter.write_to_string(tl)
 
     # Disable top track so we only have one track
     tl.tracks[1].enabled = False
-    result = otio.adapters.write_to_string(tl, adapter_name="cmx_3600")
+    result = cmx_adapter.write_to_string(tl)
     expected = r"""TITLE: enable_test
 
 001  Clip001  V     C        00:00:00:00 00:00:00:03 00:00:00:00 00:00:00:03
@@ -1200,8 +1184,8 @@ def test_enabled():
     assert result == expected
 
     # Disable first clip in the track
-    tl.tracks[0][0].enabled = False
-    result = otio.adapters.write_to_string(tl, adapter_name="cmx_3600")
+    tl.tracks[0].find_children()[0].enabled = False
+    result = cmx_adapter.write_to_string(tl)
     expected = r"""TITLE: enable_test
 
 001  Clip002  V     C        00:00:00:03 00:00:00:06 00:00:00:03 00:00:00:06
