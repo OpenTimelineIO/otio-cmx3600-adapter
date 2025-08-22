@@ -20,19 +20,16 @@ def test_cdl_read():
     assert len(timeline.tracks[0]) == 2
     for clip in timeline.tracks[0]:
         # clip = timeline.tracks[0][0]
-        assert clip.name == \
-            "ZZ100_501 (LAY3)"
-        assert clip.source_range.duration == \
-            otio.opentime.from_timecode("00:00:01:07", 24)
+        assert clip.name == "ZZ100_501 (LAY3)"
+        assert clip.source_range.duration == otio.opentime.from_timecode(
+            "00:00:01:07", 24
+        )
         cdl = clip.metadata.get("cdl", {})
-        assert cdl.get("asc_sat") == \
-            0.9
-        assert list(cdl.get("asc_sop").get("slope")) == \
-            [0.1, 0.2, 0.3]
-        assert list(cdl.get("asc_sop").get("offset")) == \
-            [1.0000, -0.0122, 0.0305]
-        assert list(cdl.get("asc_sop").get("power")) == \
-            [1.0000, 0.0000, 1.0000]
+        assert cdl.get("asc_sat") == 0.9
+        assert list(cdl.get("asc_sop").get("slope")) == [0.1, 0.2, 0.3]
+        assert list(cdl.get("asc_sop").get("offset")) == [1.0000, -0.0122, 0.0305]
+        assert list(cdl.get("asc_sop").get("power")) == [1.0000, 0.0000, 1.0000]
+
 
 def test_cdl_read_with_commas():
     # This EDL was generated with Premiere Pro using the CDL master effect
@@ -68,13 +65,12 @@ FCM: NON-DROP FRAME
         ],
     }
 
-    assert round(abs(cdl_metadata["asc_sat"]-1.2988), 7) == 0
+    assert round(abs(cdl_metadata["asc_sat"] - 1.2988), 7) == 0
     for function in ("slope", "offset", "power"):
-        comparisons = zip(
-            cdl_metadata["asc_sop"][function], ref_sop_values[function]
-        )
+        comparisons = zip(cdl_metadata["asc_sop"][function], ref_sop_values[function])
         for value_comp, ref_comp in comparisons:
-            assert round(abs(value_comp-ref_comp), 7) == 0, f"mismatch in {function}"
+            assert round(abs(value_comp - ref_comp), 7) == 0, f"mismatch in {function}"
+
 
 def test_cdl_round_trip():
     original = """TITLE: Example_Screening.01

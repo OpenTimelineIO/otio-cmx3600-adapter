@@ -139,7 +139,6 @@ def test_line_variants(event, expected_fields):
     assert isinstance(parsed_statement, edl_statement.StandardFormStatement)
     statement: edl_statement.StandardFormStatement = parsed_statement
 
-
     assert statement.edit_number == expected_fields[0]
     assert statement.source_identification == expected_fields[1]
     assert statement.channels == expected_fields[2]
