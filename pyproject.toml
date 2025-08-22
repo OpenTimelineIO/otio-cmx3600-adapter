@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "otio-cmx3600-adapter"
-version = "1.1.0"
+version = "2.0.0.dev1"
 description = "OpenTimelineIO CMX 3600 EDL Adapter"
 authors = [
   { name="Contributors to the OpenTimelineIO project", email="otio-discussion@lists.aswf.io" },
@@ -43,6 +43,9 @@ Tracker = "https://github.com/OpenTimelineIO/otio-cmx3600-adapter/issues"
 
 [project.entry-points."opentimelineio.plugins"]
 otio_cmx3600_adapter = "otio_cmx3600_adapter"
+
+[project.scripts]
+edldump = "otio_cmx3600_adapter.console:edldump"
 
 [tool.hatch.build.targets.sdist]
 # Ensure the sdist includes a setup.py for older pip versions

@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 import opentimelineio as otio
 
+
 # List of sample files used in tests
 SAMPLE_DATA_DIR = os.path.join(os.path.dirname(__file__), "sample_data")
 SCREENING_EXAMPLE_PATH = os.path.join(SAMPLE_DATA_DIR, "screening_example.edl")
@@ -32,6 +33,8 @@ SPEED_EFFECTS_TEST_SMALL = os.path.join(SAMPLE_DATA_DIR, "speed_effects_small.ed
 MULTIPLE_TARGET_AUDIO_PATH = os.path.join(SAMPLE_DATA_DIR, "multi_audio.edl")
 TRANSITION_DURATION_TEST = os.path.join(SAMPLE_DATA_DIR, "transition_duration.edl")
 ENABLED_TEST = os.path.join(SAMPLE_DATA_DIR, "enabled.otio")
+
+DISSOLVE_TESTS = [DISSOLVE_TEST, DISSOLVE_TEST_2, DISSOLVE_TEST_3, DISSOLVE_TEST_4]
 
 
 def test_edl_read(cmx_adapter):
@@ -155,6 +158,7 @@ V     C        00:00:00:00 00:00:00:05 00:00:00:00 00:00:00:05
 def test_edl_round_trip_mem2disk2mem(cmx_adapter, assertJsonEqual):
     track = otio.schema.Track()
     tl = otio.schema.Timeline("test_timeline", tracks=[track])
+    tl.global_start_time = otio.opentime.from_timecode("01:00:00:00", 24)
     rt = otio.opentime.RationalTime(5.0, 24.0)
     mr = otio.schema.ExternalReference(target_url="/var/tmp/test.mov")
     md = {
@@ -178,10 +182,7 @@ def test_edl_round_trip_mem2disk2mem(cmx_adapter, assertJsonEqual):
         name="test clip3", media_reference=mr.clone(), source_range=tr, metadata=md
     )
     cl4 = otio.schema.Clip(
-        name="test clip3_ff",
-        media_reference=mr.clone(),
-        source_range=tr,
-        metadata=md,
+        name="test clip3_ff", media_reference=mr.clone(), source_range=tr, metadata=md
     )
 
     cl4.effects[:] = [otio.schema.FreezeFrame()]
@@ -200,6 +201,19 @@ def test_edl_round_trip_mem2disk2mem(cmx_adapter, assertJsonEqual):
 
     result = cmx_adapter.write_to_string(tl)
     new_otio = cmx_adapter.read_from_string(result)
+
+    # Cull out the metadata fields that are read-only
+    del new_otio.metadata["cmx_3600"]
+    delkeys = {"clip_name", "events", "original_timecode"}
+    # TODO: replace this with children_if in otio 0.16.0
+    for track in new_otio.tracks:
+        for item in track:
+            cmx_3600_metadata = item.metadata.get("cmx_3600", {})
+            for key in delkeys:
+                try:
+                    del cmx_3600_metadata[key]
+                except KeyError:
+                    continue
 
     # directly compare clip with speed effect
     assert len(new_otio.tracks[0][3].effects) == 1
@@ -236,9 +250,19 @@ def test_edl_round_trip_disk2mem2disk_speed_effects(
 
     result = cmx_adapter.read_from_file(tmp_path)
 
+    # Due to how M2 speed factors may not match the timecode values
+    # (they can be off by one), we special case check that clip and then
+    # snap the metadata value back to what it originally was
+    # We could consider overriding the value in the M2 speed with what
+    # the TC says, but it's probably best to stay true to what the EDL
+    # was signalling, who knows what TC rounding methods are used.
+    cmx_metadata = result.tracks[0][-1].metadata["cmx_3600"]
+    assert cmx_metadata["original_timecode"]["source_tc_out"] == "01:00:08:23"
+    cmx_metadata["original_timecode"]["source_tc_out"] = "01:00:08:22"
+
     # When debugging, you can use this to see the difference in the OTIO
-    # cmx_3600.otio_json.write_to_file(timeline, "/tmp/original.otio")
-    # cmx_3600.otio_json.write_to_file(result, "/tmp/output.otio")
+    # otio.adapters.otio_json.write_to_file(timeline, "/tmp/original.otio")
+    # otio.adapters.otio_json.write_to_file(result, "/tmp/output.otio")
     # os.system("xxdiff /tmp/{original,output}.otio")
 
     # When debugging, use this to see the difference in the EDLs on disk
@@ -260,12 +284,12 @@ def test_edl_round_trip_disk2mem2disk(
     result = cmx_adapter.read_from_file(tmp_path)
 
     # When debugging, you can use this to see the difference in the OTIO
-    # cmx_3600.otio_json.write_to_file(timeline, "/tmp/original.otio")
-    # cmx_3600.otio_json.write_to_file(result, "/tmp/output.otio")
+    # otio.adapters.otio_json.write_to_file(timeline, "/tmp/original.otio")
+    # otio.adapters.otio_json.write_to_file(result, "/tmp/output.otio")
     # os.system("opendiff /tmp/{original,output}.otio")
 
-    original_json = otio.adapters.write_to_string(timeline, "otio_json")
-    output_json = otio.adapters.write_to_string(result, "otio_json")
+    original_json = otio.adapters.otio_json.write_to_string(timeline)
+    output_json = otio.adapters.otio_json.write_to_string(result)
     assert original_json == output_json
 
     # The in-memory OTIO representation should be the same
@@ -402,7 +426,7 @@ def test_imagesequence_write(cmx_adapter):
 def test_dissolve_parse(cmx_adapter):
     tl = cmx_adapter.read_from_file(DISSOLVE_TEST)
     # clip/transition/clip/clip
-    assert len(tl.tracks[0]) == 4
+    assert len(tl.tracks[0]) == 3
 
     assert isinstance(tl.tracks[0][1], otio.schema.Transition)
     assert tl.tracks[0][0].duration().value == 9
@@ -412,63 +436,71 @@ def test_dissolve_parse(cmx_adapter):
     assert tl.tracks[0][0].name == "clip_A"
     assert tl.tracks[0][1].duration().value == 10
     assert tl.tracks[0][1].name == "SMPTE_Dissolve from clip_A to clip_B"
-    assert tl.tracks[0][2].duration().value == 10
-    assert tl.tracks[0][2].visible_range().duration.value == 10
-    assert tl.tracks[0][2].name == "clip_B"
-    assert tl.tracks[0][3].duration().value == 1
+    assert tl.tracks[0][2].duration().value == 11
+    assert tl.tracks[0][2].visible_range().duration.value == 11
     assert tl.tracks[0][2].name == "clip_B"
 
 
 def test_dissolve_parse_middle(cmx_adapter):
     tl = cmx_adapter.read_from_file(DISSOLVE_TEST_2)
     trck = tl.tracks[0]
-    # 3 clips and 1 transition
-    assert len(trck) == 4
+    # 2 clips and 1 transition
+    assert len(trck) == 3
 
+    clip_a = trck[0]
+    assert clip_a.name == "clip_A"
+    assert clip_a.duration().value == 5
+    assert clip_a.visible_range().duration.to_frames() == 15
+
+    transition = trck[1]
     assert isinstance(trck[1], otio.schema.Transition)
+    assert transition.duration().value == 10
+    assert transition.name == "SMPTE_Dissolve from clip_A to clip_B"
+    assert transition.transition_type == otio.schema.TransitionTypes.SMPTE_Dissolve
 
-    assert trck[0].duration().value == 5
-    assert trck[0].visible_range().duration.to_frames() == 15
-    assert trck[1].duration().value == 10
-    assert trck[1].name == "SMPTE_Dissolve from clip_A to clip_B"
-
+    clip_b = trck[2]
     assert (
-        trck[2].source_range.start_time.value
+        clip_b.source_range.start_time.value
         == otio.opentime.from_timecode("01:00:08:04", 24).value
     )
-    assert trck[2].name == "clip_B"
-    assert trck[2].duration().value == 10
-    assert trck[2].visible_range().duration.value == 10
-
-    assert tl.tracks[0][0].visible_range().duration.to_frames() == 15
+    assert clip_b.name == "clip_B"
+    assert clip_b.duration().value == 15
+    assert clip_b.visible_range().duration.value == 15
 
 
 def test_dissolve_parse_full_clip_dissolve(cmx_adapter):
     tl = cmx_adapter.read_from_file(DISSOLVE_TEST_3)
-    assert len(tl.tracks[0]) == 4
+    assert len(tl.tracks[0]) == 5
 
-    assert isinstance(tl.tracks[0][1], otio.schema.Transition)
+    assert isinstance(tl.tracks[0][2], otio.schema.Transition)
 
     trck = tl.tracks[0]
     clip_a = trck[0]
     assert clip_a.name == "Clip_A.mov"
     assert clip_a.duration().value == 61
-    assert clip_a.visible_range().duration.value == 61 + 30
+    assert clip_a.visible_range().duration.value == 61
 
-    transition = trck[1]
+    clip_b = trck[1]
+    assert clip_b.name == "Clip_B.mov"
+    assert clip_b.duration().value == 0
+    assert clip_b.visible_range().duration.value == 30
+
+    transition = trck[2]
     # Note: clip names in the EDL are wrong, the transition is actually
     # from Clip_A to Clip_B
     assert transition.name == "SMPTE_Dissolve from Clip_B.mov to Clip_C.mov"
     assert transition.in_offset.value == 0
     assert transition.out_offset.value == 30
 
-    clip_c = trck[2]
+    clip_c = trck[3]
     assert clip_c.name == "Clip_C.mov"
-    assert clip_c.source_range.start_time.value == 86400 + (33 * 24 + 22)
+    assert clip_c.source_range.start_time == otio.opentime.from_timecode(
+        "01:00:33:22", 24
+    )
     assert clip_c.duration().value == 30
     assert clip_c.visible_range().duration.value == 30
 
-    clip_d = trck[3]
+    clip_d = trck[4]
     assert clip_d.name == "Clip_D.mov"
     assert clip_d.source_range.start_time.value == 86400
     assert clip_d.duration().value == 46
@@ -489,20 +521,21 @@ def test_dissolve_with_odd_frame_count_maintains_length(cmx_adapter):
 
 def test_wipe_parse(cmx_adapter):
     tl = cmx_adapter.read_from_file(WIPE_TEST)
-    assert len(tl.tracks[0]) == 4
+    track = tl.tracks[0]
+    assert len(track) == 3
 
-    wipe = tl.tracks[0][1]
+    wipe = track[1]
     assert isinstance(wipe, otio.schema.Transition)
     assert wipe.transition_type == "SMPTE_Wipe"
     assert wipe.metadata["cmx_3600"]["transition"] == "W001"
 
-    assert tl.tracks[0][0].duration().value == 9
-    assert tl.tracks[0][0].visible_range().duration.value == 19
+    clip_a = track[0]
+    assert clip_a.duration().value == 9
+    assert clip_a.visible_range().duration.value == 9 + 10
 
-    assert tl.tracks[0][2].duration().value == 10
-    assert tl.tracks[0][2].visible_range().duration.value == 10
-
-    assert tl.tracks[0][3].duration().value == 1
+    clip_b = track[2]
+    assert clip_b.duration().value == 10 + 1
+    assert clip_b.visible_range().duration.value == 10 + 1
 
 
 def test_fade_to_black(cmx_adapter):
@@ -520,9 +553,6 @@ def test_fade_to_black(cmx_adapter):
     assert tl.tracks[0][2].media_reference.generator_kind == "black"
     assert tl.tracks[0][2].duration().value == 24
     assert tl.tracks[0][2].source_range.start_time.value == 0
-
-
-DISSOLVE_TESTS = [DISSOLVE_TEST, DISSOLVE_TEST_2, DISSOLVE_TEST_3, DISSOLVE_TEST_4]
 
 
 @pytest.mark.parametrize(
@@ -639,8 +669,7 @@ def test_style_edl_read(cmx_adapter, assertIsOTIOEquivalentTo):
             )
         except AssertionError:
             assertIsOTIOEquivalentTo(
-                timeline.tracks[0][0].media_reference,
-                otio.schema.MissingReference(),
+                timeline.tracks[0][0].media_reference, otio.schema.MissingReference()
             )
 
         try:
@@ -661,8 +690,7 @@ def test_style_edl_read(cmx_adapter, assertIsOTIOEquivalentTo):
             )
         except AssertionError:
             assertIsOTIOEquivalentTo(
-                timeline.tracks[0][1].media_reference,
-                otio.schema.MissingReference(),
+                timeline.tracks[0][1].media_reference, otio.schema.MissingReference()
             )
 
 
@@ -996,17 +1024,18 @@ def test_invalid_edl_style_raises_exception(cmx_adapter):
 
 
 def test_invalid_record_timecode(cmx_adapter):
+    # There are timecodes beyond the 23 frame limit in this EDL that cause a
+    # ValueError when parsed at 24fps.
     with pytest.raises(ValueError):
-        tl = cmx_adapter.read_from_file(TIMECODE_MISMATCH_TEST)
-    with pytest.raises(cmx_adapter.module().EDLParseError):
-        tl = cmx_adapter.read_from_file(TIMECODE_MISMATCH_TEST, rate=25)
+        cmx_adapter.read_from_file(TIMECODE_MISMATCH_TEST)
 
-    tl = cmx_adapter.read_from_file(
-        TIMECODE_MISMATCH_TEST, rate=25, ignore_timecode_mismatch=True
-    )
+    tl = cmx_adapter.read_from_file(TIMECODE_MISMATCH_TEST, rate=25)
+    expected_duration = otio.opentime.from_timecode(
+        "00:00:19:19", 25
+    ) - otio.opentime.from_timecode("00:00:17:22", 25)
     assert tl.tracks[0][3].range_in_parent() == otio.opentime.TimeRange(
         start_time=otio.opentime.from_timecode("00:00:17:22", 25),
-        duration=otio.opentime.from_timecode("00:00:01:24", 25),
+        duration=expected_duration,
     )
 
 
@@ -1021,13 +1050,21 @@ def test_can_read_frame_cut_points(cmx_adapter):
 
     # VALIDATE
     assert tl.duration().value == 276
-    assert len(tl.tracks[0]) == 4
-    assert tl.tracks[0][0].duration().value == 57
-    assert tl.tracks[0][0].visible_range().duration.value == 57 + 27
-    assert tl.tracks[0][1].in_offset.value == 0
-    assert tl.tracks[0][1].out_offset.value == 27
-    assert tl.tracks[0][2].duration().value == 27
-    assert tl.tracks[0][3].duration().value == 276 - 84
+    assert len(tl.tracks) == 1
+
+    track = tl.tracks[0]
+    assert len(track) == 3
+
+    clip_a = track[0]
+    assert clip_a.duration().value == 57
+    assert clip_a.visible_range().duration.value == 57 + 27
+
+    transition = track[1]
+    assert transition.in_offset.value == 0
+    assert transition.out_offset.value == 27
+
+    clip_b = track[2]
+    assert clip_b.duration().value == 27 + (381 - 189)
 
 
 def test_speed_effects(cmx_adapter):
@@ -1041,12 +1078,9 @@ def test_speed_effects(cmx_adapter):
     assert clip.duration() == otio.opentime.from_timecode("00:00:00:17", 24)
     clip = tl.tracks[0][182]
     # TODO: We should be able to ask for the source without the effect
-    # self.assertEqual(
-    #     clip.source_range,
-    #     otio.opentime.TimeRange(
-    #         start_time=otio.opentime.from_timecode("01:00:10:21", 24),
-    #         duration=otio.opentime.from_timecode("00:00:00:01", 24)
-    #     )
+    # assert clip.source_range == otio.opentime.TimeRange(
+    #     start_time=otio.opentime.from_timecode("01:00:10:21", 24),
+    #     duration=otio.opentime.from_timecode("00:00:00:01", 24)
     # )
     assert clip.range_in_parent() == otio.opentime.TimeRange(
         start_time=otio.opentime.from_timecode("00:08:30:00", 24),
@@ -1064,12 +1098,9 @@ def test_speed_effects(cmx_adapter):
     assert clip.metadata.get("cmx_3600", {}).get("motion") is None
     assert clip.duration() == otio.opentime.from_timecode("00:00:01:12", 24)
     # TODO: We should be able to ask for the source without the effect
-    # self.assertEqual(
-    #     clip.source_range,
-    #     otio.opentime.TimeRange(
-    #         start_time=otio.opentime.from_timecode("01:00:06:00", 24),
-    #         duration=otio.opentime.from_timecode("00:00:02:22", 24)
-    #     )
+    # clip.source_range == otio.opentime.TimeRange(
+    #     start_time=otio.opentime.from_timecode("01:00:06:00", 24),
+    #     duration=otio.opentime.from_timecode("00:00:02:22", 24)
     # )
     assert clip.range_in_parent() == otio.opentime.TimeRange(
         start_time=otio.opentime.from_timecode("00:11:31:16", 24),
@@ -1091,21 +1122,43 @@ def test_three_part_transition(cmx_adapter):
     Test A->B->C Transition
     """
     tl = cmx_adapter.read_from_file(DISSOLVE_TEST_4)
-    assert len(tl.tracks[0]) == 8
+    assert len(tl.tracks[0]) == 10
 
-    assert tl.tracks[0][0].duration().value == 30.0
-    assert tl.tracks[0][1].duration().value == 51.0
-    assert tl.tracks[0][1].visible_range().duration.value == 51 + 35
-    assert isinstance(tl.tracks[0][2], otio.schema.Transition)
-    assert tl.tracks[0][2].duration().value == 35.0
-    assert tl.tracks[0][3].duration().value == 81.0
-    assert tl.tracks[0][3].visible_range().duration.value == 81 + 64
-    assert isinstance(tl.tracks[0][4], otio.schema.Transition)
-    assert tl.tracks[0][4].duration().value == 64.0
-    assert tl.tracks[0][5].duration().value == 84.0
-    assert tl.tracks[0][5].visible_range().duration.value == 84.0
-    assert tl.tracks[0][6].duration().value == 96.0
-    assert tl.tracks[0][7].duration().value == 135.0
+    track = tl.tracks[0]
+
+    abc0000 = track[0]
+    assert abc0000.duration().value == 30.0
+
+    abc0010 = track[1]
+    assert abc0010.duration().value == 51.0
+
+    abc0020_1 = track[2]
+    assert abc0020_1.duration().value == 0
+    assert abc0020_1.visible_range().duration.value == 35
+
+    transition_1 = track[3]
+    assert isinstance(transition_1, otio.schema.Transition)
+    assert transition_1.duration().value == 35.0
+
+    abc0020_2 = track[4]
+    event_3_duration = otio.opentime.from_timecode(
+        "01:00:10:07", 24
+    ) - otio.opentime.from_timecode("01:00:06:22", 24)
+    assert abc0020_2.duration() == event_3_duration
+    assert abc0020_2.visible_range().duration == event_3_duration
+
+    abc030_1 = track[5]
+    assert abc030_1.visible_range().duration.value == 64.0
+
+    transition_2 = track[6]
+    assert isinstance(transition_2, otio.schema.Transition)
+    assert transition_2.duration().value == 64.0
+
+    abc030_2 = track[7]
+    assert abc030_2.duration().value == 84.0
+    assert abc030_2.visible_range().duration.value == 84.0
+    assert track[8].duration().value == 96.0
+    assert track[9].duration().value == 135.0
 
 
 def test_enabled(cmx_adapter):
