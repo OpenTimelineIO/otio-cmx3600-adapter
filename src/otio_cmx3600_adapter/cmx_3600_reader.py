@@ -352,7 +352,7 @@ class EDLReader:
                 elif (
                     statement_identifier is NoteFormStatement.NoteFormIdentifiers.SPLIT
                 ):
-                    # SPLIT notes appy to the following event
+                    # SPLIT notes apply to the following event
                     # TODO: How do we make the edit number on this statement not win?
                     # Perhaps the loop keeps a None Edit number until it hits an explicit one?
                     should_start_new_event = True
