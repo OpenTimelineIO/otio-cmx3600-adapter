@@ -645,7 +645,7 @@ class ClipHandler:
         if self.transition_id != self.clip_num:
             raise EDLParseError(
                 'transition and event id mismatch: {} vs {}'.format(
-                    self.transaction_id, self.clip_num,
+                    self.transition_id, self.clip_num,
                 )
             )
         if re.match(r'W(\d{3})', self.transition_type):
