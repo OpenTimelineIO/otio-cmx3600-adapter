@@ -24,6 +24,7 @@ DISSOLVE_TEST = os.path.join(SAMPLE_DATA_DIR, "dissolve_test.edl")
 DISSOLVE_TEST_2 = os.path.join(SAMPLE_DATA_DIR, "dissolve_test_2.edl")
 DISSOLVE_TEST_3 = os.path.join(SAMPLE_DATA_DIR, "dissolve_test_3.edl")
 DISSOLVE_TEST_4 = os.path.join(SAMPLE_DATA_DIR, "dissolve_test_4.edl")
+DISSOLVE_TEST_FAIL = os.path.join(SAMPLE_DATA_DIR, "dissolve_test_fail.edl")
 GAP_TEST = os.path.join(SAMPLE_DATA_DIR, "gap_test.edl")
 WIPE_TEST = os.path.join(SAMPLE_DATA_DIR, "wipe_test.edl")
 TIMECODE_MISMATCH_TEST = os.path.join(SAMPLE_DATA_DIR, "timecode_mismatch.edl")
@@ -1106,6 +1107,13 @@ def test_three_part_transition(cmx_adapter):
     assert tl.tracks[0][5].visible_range().duration.value == 84.0
     assert tl.tracks[0][6].duration().value == 96.0
     assert tl.tracks[0][7].duration().value == 135.0
+
+
+def test_transition_id_mismatch(cmx_adapter):
+    with pytest.raises(cmx_adapter.module().EDLParseError) as err:
+        cmx_adapter.read_from_file(DISSOLVE_TEST_FAIL)
+
+    assert 'transition and event id mismatch: ' in str(err)
 
 
 def test_enabled(cmx_adapter):
